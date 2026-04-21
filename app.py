@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from utils import save_assessment_to_db, get_model, predict_asd
 
 # Paramètres de la page
 st.set_page_config(
@@ -64,41 +63,29 @@ with col2:
     
     col_age, col_gender = st.columns(2)
     with col_age:
-        age_months = st.number_input("Âge de l'enfant (en mois)", min_value=0, max_value=72, value=24)
+        age_mois = st.number_input("Âge de l'enfant (en mois)", min_value=0, max_value=72, value=24)
     with col_gender:
-        gender = st.selectbox("Sexe", ["Masculin", "Féminin"])
-        gender_val = 1 if gender == "Masculin" else 0
+        genre = st.selectbox("Sexe", ["Masculin", "Féminin"])
+        genre_val = 1 if genre == "Masculin" else 0
     
     col_family, col_jaundice = st.columns(2)
     with col_family:
-        family_asd = st.selectbox("Y a-t-il des antécédents familiaux d'autisme ?", ["Non", "Oui"])
-        family_val = 1 if family_asd == "Oui" else 0
+        famille_asd = st.selectbox("Y a-t-il des antécédents familiaux d'autisme ?", ["Non", "Oui"])
+        famille_val = 1 if famille_asd == "Oui" else 0
     with col_jaundice:
-        jaundice = st.selectbox("L'enfant a-t-il souffert de jaunisse à la naissance ?", ["Non", "Oui"])
-        jaundice_val = 1 if jaundice == "Oui" else 0
+        jaunisse = st.selectbox("L'enfant a-t-il souffert de jaunisse à la naissance ?", ["Non", "Oui"])
+        jaunisse_val = 1 if jaunisse == "Oui" else 0
     
     # Bouton de prédiction
     if st.button("🔍 Analyser les résultats et prédire", type="primary", use_container_width=True):
         with st.spinner("Analyse des données en cours..."):
             # Calcul du score total
-            total_score = sum(responses.values())
-            
-            # Préparation des données pour sauvegarde
-            assessment_data = {
-                "timestamp": datetime.now(),
-                "age_months": age_months,
-                "gender": gender_val,
-                "family_asd": family_val,
-                "jaundice": jaundice_val,
-                "responses": responses,
-                "total_score": total_score,
-                "prediction": None
-            }
+            score_total = sum(responses.values())
             
             # Prédiction basée sur le score
-            if total_score >= 6:
+            if score_total >= 6:
                 prediction = 1
-                risk_level = "Élevé"
+                niveau_risque = "Élevé"
                 message = """
                 ⚠️ **Résultat de l'évaluation : Probabilité élevée**
                 
@@ -110,9 +97,9 @@ with col2:
                 - Continuez à observer le développement de votre enfant
                 - Notez vos observations à partager avec le médecin
                 """
-            elif total_score >= 4:
+            elif score_total >= 4:
                 prediction = 0
-                risk_level = "Moyen"
+                niveau_risque = "Moyen"
                 message = """
                 🟡 **Résultat de l'évaluation : Probabilité moyenne**
                 
@@ -124,7 +111,7 @@ with col2:
                 """
             else:
                 prediction = 0
-                risk_level = "Faible"
+                niveau_risque = "Faible"
                 message = """
                 🟢 **Résultat de l'évaluation : Probabilité faible**
                 
@@ -135,16 +122,6 @@ with col2:
                 - Effectuez les contrôles pédiatriques réguliers
                 """
             
-            assessment_data["prediction"] = prediction
-            assessment_data["risk_level"] = risk_level
-            
-            # Sauvegarde dans la base de données
-            try:
-                saved_id = save_assessment_to_db(assessment_data)
-                st.success(f"✅ Évaluation sauvegardée avec succès ! (ID: {saved_id})")
-            except Exception as e:
-                st.error(f"Erreur lors de la sauvegarde des données : {str(e)}")
-            
             # Affichage du résultat
             st.markdown("---")
             st.subheader("📊 Résultat de l'évaluation")
@@ -152,8 +129,15 @@ with col2:
             
             # Affichage des détails
             with st.expander("Voir le détail des réponses"):
-                st.write(f"**Score total :** {total_score} sur 10")
+                st.write(f"**Score total :** {score_total} sur 10")
                 st.write("**Détail des réponses :**")
                 for key, question in questions.items():
-                    status = "✅ Oui" if responses[key] == 1 else "❌ Non"
-                    st.write(f"- {question}: {status}") 
+                    statut = "✅ Oui" if responses[key] == 1 else "❌ Non"
+                    st.write(f"- {question}: {statut}")
+            
+            # Afficher un résumé des informations
+            with st.expander("Voir le résumé des informations"):
+                st.write(f"**Âge :** {age_mois} mois")
+                st.write(f"**Sexe :** {genre}")
+                st.write(f"**Antécédents familiaux d'autisme :** {famille_asd}")
+                st.write(f"**Jaunisse à la naissance :** {jaunisse}")
