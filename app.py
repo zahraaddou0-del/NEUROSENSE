@@ -156,4 +156,4 @@ with col2:
                 st.write("**تفاصيل الإجابات:**")
                 for key, question in questions.items():
                     status = "✅ نعم" if responses[key] == 1 else "❌ لا"
-                    st.write(f"- {question}: {status}")
+                    st.write(f"- {question}: {status}") 
