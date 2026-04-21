@@ -4,49 +4,49 @@ import numpy as np
 from datetime import datetime
 from utils import save_assessment_to_db, get_model, predict_asd
 
-# إعدادات الصفحة
+# Paramètres de la page
 st.set_page_config(
-    page_title="NeuroSense - الكشف المبكر للتوحد",
+    page_title="NeuroSense - Détection précoce de l'autisme",
     page_icon="🧠",
     layout="wide"
 )
 
-# العنوان الرئيسي
+# Titre principal
 st.title("🧠 NeuroSense")
-st.markdown("### الكشف المبكر لاضطراب طيف التوحد باستخدام الذكاء الاصطناعي")
+st.markdown("### Détection précoce des troubles du spectre autistique par intelligence artificielle")
 
-# العمودين: واحد للشرح والثاني للاستبيان
+# Deux colonnes : une pour l'explication, l'autre pour le questionnaire
 col1, col2 = st.columns([1, 2])
 
 with col1:
     st.info("""
-    **ما هو NeuroSense؟**
+    **Qu'est-ce que NeuroSense ?**
     
-    NeuroSense هو نظام ذكي يساعد في الكشف المبكر لعلامات التوحد 
-    لدى الأطفال باستخدام تقنيات الذكاء الاصطناعي.
+    NeuroSense est un système intelligent qui aide à détecter précocement 
+    les signes de l'autisme chez les enfants en utilisant des technologies d'intelligence artificielle.
     
-    **كيف يعمل؟**
-    1. أجب عن أسئلة الاستبيان
-    2. سيقوم النظام بتحليل إجاباتك
-    3. ستحصل على تقييم أولي ومؤشر للمخاطر
+    **Comment ça fonctionne ?**
+    1. Répondez aux questions du questionnaire
+    2. Le système analyse vos réponses
+    3. Vous obtenez une évaluation initiale et un indicateur de risque
     """)
 
 with col2:
-    st.subheader("📝 استبيان التقييم")
-    st.markdown("يرجى الإجابة عن الأسئلة التالية بدقة:")
+    st.subheader("📝 Questionnaire d'évaluation")
+    st.markdown("Veuillez répondre précisément aux questions suivantes :")
 
-    # أسئلة Q-Chat-10 (10 أسئلة رئيسية)
+    # Questions Q-Chat-10 (10 questions principales)
     questions = {
-        "a1": "هل يحدق الطفل في الأشياء دون هدف واضح؟",
-        "a2": "هل يفضل الطفل اللعب بمفرده؟",
-        "a3": "هل يتجنب الطفل التواصل البصري؟",
-        "a4": "هل يكرر الطفل نفس الحركات بشكل متكرر؟",
-        "a5": "هل يتأثر الطفل بشكل غير طبيعي بالأصوات؟",
-        "a6": "هل يواجه الطفل صعوبة في فهم مشاعر الآخرين؟",
-        "a7": "هل يقوم الطفل بترتيب الأشياء بطريقة معينة ويغضب إذا تغيرت؟",
-        "a8": "هل يبدو الطفل غير مهتم بالتفاعل مع الآخرين؟",
-        "a9": "هل يتأخر الطفل في تطوير مهارات الكلام؟",
-        "a10": "هل يفضل الطفل الروتين الثابت ويصعب عليه التغيير؟"
+        "a1": "L'enfant fixe-t-il les objets sans but apparent ?",
+        "a2": "L'enfant préfère-t-il jouer seul ?",
+        "a3": "L'enfant évite-t-il le contact visuel ?",
+        "a4": "L'enfant répète-t-il les mêmes mouvements de façon répétitive ?",
+        "a5": "L'enfant réagit-il anormalement aux sons ?",
+        "a6": "L'enfant a-t-il du mal à comprendre les émotions des autres ?",
+        "a7": "L'enfant range-t-il les objets d'une manière spécifique et se fâche-t-il si cela change ?",
+        "a8": "L'enfant semble-t-il peu intéressé par les interactions avec les autres ?",
+        "a9": "L'enfant a-t-il un retard dans le développement du langage ?",
+        "a10": "L'enfant préfère-t-il une routine fixe et a-t-il du mal à s'adapter aux changements ?"
     }
 
     responses = {}
@@ -54,36 +54,36 @@ with col2:
         responses[key] = st.radio(
             question, 
             [0, 1], 
-            format_func=lambda x: "نعم ✅" if x == 1 else "لا ❌",
+            format_func=lambda x: "Oui ✅" if x == 1 else "Non ❌",
             horizontal=True,
             key=key
         )
     
-    # معلومات إضافية
-    st.subheader("📋 معلومات إضافية")
+    # Informations complémentaires
+    st.subheader("📋 Informations complémentaires")
     
     col_age, col_gender = st.columns(2)
     with col_age:
-        age_months = st.number_input("عمر الطفل (بالشهور)", min_value=0, max_value=72, value=24)
+        age_months = st.number_input("Âge de l'enfant (en mois)", min_value=0, max_value=72, value=24)
     with col_gender:
-        gender = st.selectbox("الجنس", ["ذكر", "أنثى"])
-        gender_val = 1 if gender == "ذكر" else 0
+        gender = st.selectbox("Sexe", ["Masculin", "Féminin"])
+        gender_val = 1 if gender == "Masculin" else 0
     
     col_family, col_jaundice = st.columns(2)
     with col_family:
-        family_asd = st.selectbox("هل يوجد تاريخ عائلي للتوحد؟", ["لا", "نعم"])
-        family_val = 1 if family_asd == "نعم" else 0
+        family_asd = st.selectbox("Y a-t-il des antécédents familiaux d'autisme ?", ["Non", "Oui"])
+        family_val = 1 if family_asd == "Oui" else 0
     with col_jaundice:
-        jaundice = st.selectbox("هل عانى الطفل من اليرقان عند الولادة؟", ["لا", "نعم"])
-        jaundice_val = 1 if jaundice == "نعم" else 0
+        jaundice = st.selectbox("L'enfant a-t-il souffert de jaunisse à la naissance ?", ["Non", "Oui"])
+        jaundice_val = 1 if jaundice == "Oui" else 0
     
-    # زر التنبؤ
-    if st.button("🔍 تحليل النتائج والتنبؤ", type="primary", use_container_width=True):
-        with st.spinner("جاري تحليل البيانات..."):
-            # حساب النقاط
+    # Bouton de prédiction
+    if st.button("🔍 Analyser les résultats et prédire", type="primary", use_container_width=True):
+        with st.spinner("Analyse des données en cours..."):
+            # Calcul du score total
             total_score = sum(responses.values())
             
-            # تحضير البيانات للحفظ
+            # Préparation des données pour sauvegarde
             assessment_data = {
                 "timestamp": datetime.now(),
                 "age_months": age_months,
@@ -95,65 +95,65 @@ with col2:
                 "prediction": None
             }
             
-            # التنبؤ المبدئي (يعتمد على النقاط)
+            # Prédiction basée sur le score
             if total_score >= 6:
                 prediction = 1
-                risk_level = "مرتفع"
+                risk_level = "Élevé"
                 message = """
-                ⚠️ **نتيجة التقييم: احتمالية مرتفعة**
+                ⚠️ **Résultat de l'évaluation : Probabilité élevée**
                 
-                بناءً على إجاباتك، هناك مؤشرات قد تستدعي استشارة أخصائي.
-                هذه النتيجة ليست تشخيصًا نهائيًا، ولكنها دليل للمتابعة.
+                D'après vos réponses, certains indicateurs méritent une consultation avec un spécialiste.
+                Ce résultat n'est pas un diagnostic définitif, mais un guide pour un suivi approprié.
                 
-                **نصائح:**
-                - استشر أخصائي نمو وسلوك أطفال
-                - واصل مراقبة تطور طفلك
-                - سجل ملاحظاتك لمشاركتها مع الطبيب
+                **Recommandations :**
+                - Consultez un spécialiste du développement et du comportement de l'enfant
+                - Continuez à observer le développement de votre enfant
+                - Notez vos observations à partager avec le médecin
                 """
             elif total_score >= 4:
                 prediction = 0
-                risk_level = "متوسط"
+                risk_level = "Moyen"
                 message = """
-                🟡 **نتيجة التقييم: احتمالية متوسطة**
+                🟡 **Résultat de l'évaluation : Probabilité moyenne**
                 
-                بعض المؤشرات موجودة، لكنها ليست حاسمة.
+                Certains indicateurs sont présents, mais ils ne sont pas concluants.
                 
-                **نصائح:**
-                - تابع تطور طفلك لمدة 3-6 أشهر
-                - إذا لاحظت تطورًا في الأعراض، استشر طبيبًا
+                **Recommandations :**
+                - Suivez le développement de votre enfant pendant 3 à 6 mois
+                - Si vous observez une évolution des symptômes, consultez un médecin
                 """
             else:
                 prediction = 0
-                risk_level = "منخفض"
+                risk_level = "Faible"
                 message = """
-                🟢 **نتيجة التقييم: احتمالية منخفضة**
+                🟢 **Résultat de l'évaluation : Probabilité faible**
                 
-                المؤشرات التي سجلتها ضمن المعدلات الطبيعية.
+                Les indicateurs que vous avez rapportés sont dans les limites normales.
                 
-                **نصائح:**
-                - استمر في تحفيز طفلك وتفاعله
-                - تابع الفحوصات الدورية للطفل
+                **Recommandations :**
+                - Continuez à stimuler l'interaction avec votre enfant
+                - Effectuez les contrôles pédiatriques réguliers
                 """
             
             assessment_data["prediction"] = prediction
             assessment_data["risk_level"] = risk_level
             
-            # حفظ في قاعدة البيانات
+            # Sauvegarde dans la base de données
             try:
                 saved_id = save_assessment_to_db(assessment_data)
-                st.success(f"✅ تم حفظ التقييم بنجاح! (معرف: {saved_id})")
+                st.success(f"✅ Évaluation sauvegardée avec succès ! (ID: {saved_id})")
             except Exception as e:
-                st.error(f"حدث خطأ أثناء حفظ البيانات: {str(e)}")
+                st.error(f"Erreur lors de la sauvegarde des données : {str(e)}")
             
-            # عرض النتيجة
+            # Affichage du résultat
             st.markdown("---")
-            st.subheader("📊 نتيجة التقييم")
+            st.subheader("📊 Résultat de l'évaluation")
             st.markdown(message)
             
-            # عرض التفاصيل
-            with st.expander("عرض تفاصيل الإجابات"):
-                st.write(f"**مجموع النقاط:** {total_score} من 10")
-                st.write("**تفاصيل الإجابات:**")
+            # Affichage des détails
+            with st.expander("Voir le détail des réponses"):
+                st.write(f"**Score total :** {total_score} sur 10")
+                st.write("**Détail des réponses :**")
                 for key, question in questions.items():
-                    status = "✅ نعم" if responses[key] == 1 else "❌ لا"
+                    status = "✅ Oui" if responses[key] == 1 else "❌ Non"
                     st.write(f"- {question}: {status}") 
