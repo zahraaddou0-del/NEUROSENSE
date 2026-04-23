@@ -1,143 +1,173 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
+import random
 from datetime import datetime
 
-# Paramètres de la page
-st.set_page_config(
-    page_title="NeuroSense - Détection précoce de l'autisme",
-    page_icon="🧠",
-    layout="wide"
-)
+# إعدادات الصفحة
+st.set_page_config(page_title="NeuroSense AI+", page_icon="🧠", layout="wide")
 
-# Titre principal
-st.title("🧠 NeuroSense")
-st.markdown("### Détection précoce des troubles du spectre autistique par intelligence artificielle")
+# تهيئة الجلسة
+if 'step' not in st.session_state:
+    st.session_state.step = 1
 
-# Deux colonnes : une pour l'explication, l'autre pour le questionnaire
-col1, col2 = st.columns([1, 2])
+# العنوان الرئيسي
+st.title("🧠 NeuroSense AI+")
+st.markdown("*Détection précoce de l'autisme par Intelligence Artificielle*")
+st.divider()
 
-with col1:
-    st.info("""
-    **Qu'est-ce que NeuroSense ?**
+# ========== الخطوة 1 ==========
+if st.session_state.step == 1:
+    st.header("1. 📋 Choix du profil")
     
-    NeuroSense est un système intelligent qui aide à détecter précocement 
-    les signes de l'autisme chez les enfants en utilisant des technologies d'intelligence artificielle.
-    
-    **Comment ça fonctionne ?**
-    1. Répondez aux questions du questionnaire
-    2. Le système analyse vos réponses
-    3. Vous obtenez une évaluation initiale et un indicateur de risque
-    """)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("👨‍👩‍👦 Parent", use_container_width=True):
+            st.session_state.user_type = "Parent"
+            st.session_state.step = 2
+            st.rerun()
+    with col2:
+        if st.button("⚕️ Professionnel", use_container_width=True):
+            st.session_state.user_type = "Professionnel"
+            st.session_state.step = 2
+            st.rerun()
 
-with col2:
-    st.subheader("📝 Questionnaire d'évaluation")
-    st.markdown("Veuillez répondre précisément aux questions suivantes :")
-
-    # Questions Q-Chat-10 (10 questions principales)
-    questions = {
-        "a1": "L'enfant fixe-t-il les objets sans but apparent ?",
-        "a2": "L'enfant préfère-t-il jouer seul ?",
-        "a3": "L'enfant évite-t-il le contact visuel ?",
-        "a4": "L'enfant répète-t-il les mêmes mouvements de façon répétitive ?",
-        "a5": "L'enfant réagit-il anormalement aux sons ?",
-        "a6": "L'enfant a-t-il du mal à comprendre les émotions des autres ?",
-        "a7": "L'enfant range-t-il les objets d'une manière spécifique et se fâche-t-il si cela change ?",
-        "a8": "L'enfant semble-t-il peu intéressé par les interactions avec les autres ?",
-        "a9": "L'enfant a-t-il un retard dans le développement du langage ?",
-        "a10": "L'enfant préfère-t-il une routine fixe et a-t-il du mal à s'adapter aux changements ?"
-    }
-
-    responses = {}
-    for key, question in questions.items():
-        responses[key] = st.radio(
-            question, 
-            [0, 1], 
-            format_func=lambda x: "Oui ✅" if x == 1 else "Non ❌",
-            horizontal=True,
-            key=key
-        )
+# ========== الخطوة 2 ==========
+elif st.session_state.step == 2:
+    st.header("2. 👶 Profil de l'enfant")
     
-    # Informations complémentaires
-    st.subheader("📋 Informations complémentaires")
-    
-    col_age, col_gender = st.columns(2)
-    with col_age:
-        age_mois = st.number_input("Âge de l'enfant (en mois)", min_value=0, max_value=72, value=24)
-    with col_gender:
-        genre = st.selectbox("Sexe", ["Masculin", "Féminin"])
-        genre_val = 1 if genre == "Masculin" else 0
-    
-    col_family, col_jaundice = st.columns(2)
-    with col_family:
-        famille_asd = st.selectbox("Y a-t-il des antécédents familiaux d'autisme ?", ["Non", "Oui"])
-        famille_val = 1 if famille_asd == "Oui" else 0
-    with col_jaundice:
-        jaunisse = st.selectbox("L'enfant a-t-il souffert de jaunisse à la naissance ?", ["Non", "Oui"])
-        jaunisse_val = 1 if jaunisse == "Oui" else 0
-    
-    # Bouton de prédiction
-    if st.button("🔍 Analyser les résultats et prédire", type="primary", use_container_width=True):
-        with st.spinner("Analyse des données en cours..."):
-            # Calcul du score total
-            score_total = sum(responses.values())
-            
-            # Prédiction basée sur le score
-            if score_total >= 6:
-                prediction = 1
-                niveau_risque = "Élevé"
-                message = """
-                ⚠️ **Résultat de l'évaluation : Probabilité élevée**
-                
-                D'après vos réponses, certains indicateurs méritent une consultation avec un spécialiste.
-                Ce résultat n'est pas un diagnostic définitif, mais un guide pour un suivi approprié.
-                
-                **Recommandations :**
-                - Consultez un spécialiste du développement et du comportement de l'enfant
-                - Continuez à observer le développement de votre enfant
-                - Notez vos observations à partager avec le médecin
-                """
-            elif score_total >= 4:
-                prediction = 0
-                niveau_risque = "Moyen"
-                message = """
-                🟡 **Résultat de l'évaluation : Probabilité moyenne**
-                
-                Certains indicateurs sont présents, mais ils ne sont pas concluants.
-                
-                **Recommandations :**
-                - Suivez le développement de votre enfant pendant 3 à 6 mois
-                - Si vous observez une évolution des symptômes, consultez un médecin
-                """
+    with st.form("profil_form"):
+        nom_parent = st.text_input("Nom du parent")
+        nom_enfant = st.text_input("Nom de l'enfant")
+        age_enfant = st.number_input("Âge de l'enfant (mois)", 0, 72, 24)
+        
+        if st.form_submit_button("✅ Continuer"):
+            if nom_parent and nom_enfant:
+                st.session_state.nom_parent = nom_parent
+                st.session_state.nom_enfant = nom_enfant
+                st.session_state.age_enfant = age_enfant
+                st.session_state.step = 3
+                st.rerun()
             else:
-                prediction = 0
-                niveau_risque = "Faible"
-                message = """
-                🟢 **Résultat de l'évaluation : Probabilité faible**
-                
-                Les indicateurs que vous avez rapportés sont dans les limites normales.
-                
-                **Recommandations :**
-                - Continuez à stimuler l'interaction avec votre enfant
-                - Effectuez les contrôles pédiatriques réguliers
-                """
-            
-            # Affichage du résultat
-            st.markdown("---")
-            st.subheader("📊 Résultat de l'évaluation")
-            st.markdown(message)
-            
-            # Affichage des détails
-            with st.expander("Voir le détail des réponses"):
-                st.write(f"**Score total :** {score_total} sur 10")
-                st.write("**Détail des réponses :**")
-                for key, question in questions.items():
-                    statut = "✅ Oui" if responses[key] == 1 else "❌ Non"
-                    st.write(f"- {question}: {statut}")
-            
-            # Afficher un résumé des informations
-            with st.expander("Voir le résumé des informations"):
-                st.write(f"**Âge :** {age_mois} mois")
-                st.write(f"**Sexe :** {genre}")
-                st.write(f"**Antécédents familiaux d'autisme :** {famille_asd}")
-                st.write(f"**Jaunisse à la naissance :** {jaunisse}")
+                st.error("Veuillez remplir tous les champs")
+
+# ========== الخطوة 3 ==========
+elif st.session_state.step == 3:
+    st.header("3. 🧪 Test intelligent")
+    
+    st.info("Cliquez sur le bouton ci-dessous pour lancer l'analyse IA")
+    
+    if st.button("🚀 LANCER L'ANALYSE", type="primary", use_container_width=True):
+        st.session_state.step = 4
+        st.rerun()
+
+# ========== الخطوة 4: Questionnaire ==========
+elif st.session_state.step == 4:
+    st.header("4. 📝 Questionnaire d'évaluation")
+    
+    st.write("Veuillez répondre aux questions suivantes (0 = jamais, 10 = toujours)")
+    
+    q1 = st.slider("L'enfant évite-t-il le contact visuel ?", 0, 10, 5)
+    q2 = st.slider("L'enfant répond-il à son prénom ?", 0, 10, 5)
+    q3 = st.slider("L'enfant a-t-il des comportements répétitifs ?", 0, 10, 5)
+    
+    if st.button("✅ Enregistrer et continuer", type="primary"):
+        # Calcul du score
+        score_q = (q1 + q2 + q3) / 3
+        st.session_state.score_q = score_q
+        
+        # Score audio simulé
+        st.session_state.score_audio = random.uniform(3, 8)
+        
+        # Score vision simulé
+        st.session_state.score_vision = random.uniform(2, 9)
+        
+        # Score global
+        score_global = (st.session_state.score_q + st.session_state.score_audio + st.session_state.score_vision) / 3
+        
+        if score_global < 4:
+            niveau = "🟢 Faible risque"
+            recommandation = "Développement typique"
+        elif score_global < 7:
+            niveau = "🟠 Risque modéré"
+            recommandation = "Consultez un spécialiste"
+        else:
+            niveau = "🔴 Risque élevé"
+            recommandation = "Intervention précoce recommandée"
+        
+        st.session_state.score_global = round(score_global, 1)
+        st.session_state.niveau = niveau
+        st.session_state.recommandation = recommandation
+        
+        st.session_state.step = 5
+        st.rerun()
+
+# ========== الخطوة 5: Résultats ==========
+elif st.session_state.step == 5:
+    st.header("5. 📊 Résultats de l'analyse IA")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Score global", f"{st.session_state.score_global}/10")
+    with col2:
+        st.metric("Niveau", st.session_state.niveau)
+    with col3:
+        st.progress(st.session_state.score_global / 10)
+    
+    st.divider()
+    
+    # Détails des scores
+    st.subheader("Détails par modalité")
+    
+    scores_data = {
+        "Modalité": ["Questionnaire", "Analyse vocale", "Vision"],
+        "Score": [
+            round(st.session_state.score_q, 1),
+            round(st.session_state.score_audio, 1),
+            round(st.session_state.score_vision, 1)
+        ]
+    }
+    
+    st.dataframe(scores_data, use_container_width=True)
+    
+    # Recommandation
+    st.subheader("💡 Recommandation")
+    if "Faible" in st.session_state.niveau:
+        st.success(st.session_state.recommandation)
+    elif "modéré" in st.session_state.niveau:
+        st.warning(st.session_state.recommandation)
+    else:
+        st.error(st.session_state.recommandation)
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        rapport = f"""
+        RAPPORT NEUROSENSE
+        ==================
+        Enfant: {st.session_state.nom_enfant}
+        Score: {st.session_state.score_global}/10
+        Niveau: {st.session_state.niveau}
+        Recommandation: {st.session_state.recommandation}
+        """
+        st.download_button("📄 Télécharger rapport", rapport, file_name="rapport.txt")
+    
+    with col2:
+        if st.button("🔄 Nouveau test"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
+
+# شريط جانبي
+with st.sidebar:
+    st.markdown("## ⚙️ Paramètres")
+    langue = st.selectbox("Langue", ["Français", "English", "العربية"])
+    notifications = st.toggle("Notifications")
+    st.divider()
+    st.markdown("### 📜 Historique")
+    if 'score_global' in st.session_state:
+        st.write(f"Dernier score: {st.session_state.score_global}/10")
+    else:
+        st.write("Aucun test effectué")
