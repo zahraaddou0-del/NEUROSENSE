@@ -447,4 +447,4 @@ with st.sidebar:
     st.caption("© 2024 NeuroSense AI+ | v1.0")
 
 st.markdown("---")
-st.caption("⚠️ Application de détection précoce - Ne remplace pas un diagnostic médical professionnel") 
+st.caption("⚠️ Application de détection précoce - Ne remplace pas un diagnostic médical professionnel")
