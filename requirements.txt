@@ -2,5 +2,7 @@ streamlit
 pymongo
 pandas
 numpy
+plotly
+pillow
 scikit-learn
 python-dotenv
