@@ -68,14 +68,13 @@ elif st.session_state.etape == 2:
     
     with st.form("profil_enfant"):
         nom_parent = st.text_input("Nom du parent / Professionnel")
-        age_parent = st.number_input("Âge", min_value=18, max_value=100, step=1)
+        age_parent = st.number_input("Âge", min_value=1, max_value=100, step=1)
         
         st.markdown("---")
         
         nom_enfant = st.text_input("Nom de l'enfant")
         sexe_enfant = st.selectbox("Sexe", ["Garçon", "Fille", "Autre"])
-        historique = st.text_area("Historique médical (optionnel)", 
-                                  placeholder="Antécédents médicaux, naissance prématurée, etc...")
+      
         
         submitted = st.form_submit_button("📝 Continuer", use_container_width=True)
         
@@ -85,7 +84,6 @@ elif st.session_state.etape == 2:
                 st.session_state.age_parent = age_parent
                 st.session_state.nom_enfant = nom_enfant
                 st.session_state.sexe_enfant = sexe_enfant
-                st.session_state.historique = historique
                 st.session_state.etape = 3
                 st.rerun()
             else:
