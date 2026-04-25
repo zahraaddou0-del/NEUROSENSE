@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import random
-import plotly.graph_objects as go
 from PIL import Image
 import io
 
@@ -39,6 +38,8 @@ if 'langue' not in st.session_state:
     st.session_state.langue = "Français"
 if 'notifications' not in st.session_state:
     st.session_state.notifications = True
+if 'reponses' not in st.session_state:
+    st.session_state.reponses = []
 
 # ========== TITRE PRINCIPAL ==========
 st.title("🧠 NeuroSense AI+")
@@ -290,7 +291,6 @@ elif st.session_state.etape == 5:
             
             if st.button("🎙️ Analyser l'audio", key="analyze_audio"):
                 with st.spinner("Analyse de la voix en cours..."):
-                    # Simulation d'analyse IA
                     score_audio = random.uniform(2, 9)
                     st.session_state.score_audio = round(score_audio, 1)
                     st.success(f"Analyse vocale terminée ! Score: {st.session_state.score_audio}/10")
@@ -310,7 +310,6 @@ elif st.session_state.etape == 5:
             
             if st.button("👁️ Analyser l'image", key="analyze_vision"):
                 with st.spinner("Analyse de l'image en cours..."):
-                    # Simulation d'analyse IA
                     score_vision = random.uniform(2, 9)
                     st.session_state.score_vision = round(score_vision, 1)
                     st.success(f"Analyse visuelle terminée ! Score: {st.session_state.score_vision}/10")
@@ -371,19 +370,27 @@ elif st.session_state.etape == 6:
     
     st.markdown("---")
     
-    # Graphique
-    categories = ['Questionnaire', 'Audio', 'Vision']
-    valeurs = [
-        st.session_state.score_questionnaire,
-        st.session_state.score_audio,
-        st.session_state.score_vision
-    ]
+    # Affichage simple des scores (sans plotly)
+    st.subheader("Scores par modalité")
     
-    fig = go.Figure(data=[
-        go.Bar(x=categories, y=valeurs, marker_color=['#3498db', '#e74c3c', '#2ecc71'], text=valeurs, textposition='auto')
-    ])
-    fig.update_layout(title="Scores par modalité", yaxis_title="Score / 10", yaxis_range=[0, 10])
-    st.plotly_chart(fig, use_container_width=True)
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.info(f"**Questionnaire**\n\n{st.session_state.score_questionnaire}/10")
+    with col_b:
+        st.info(f"**Analyse vocale**\n\n{st.session_state.score_audio}/10")
+    with col_c:
+        st.info(f"**Vision**\n\n{st.session_state.score_vision}/10")
+    
+    # Barre de progression visuelle pour chaque score
+    st.subheader("Détail des scores")
+    st.write("**Questionnaire**")
+    st.progress(st.session_state.score_questionnaire / 10)
+    st.write("**Analyse vocale**")
+    st.progress(st.session_state.score_audio / 10)
+    st.write("**Vision**")
+    st.progress(st.session_state.score_vision / 10)
+    
+    st.markdown("---")
     
     # Recommandation
     st.subheader("💡 Recommandation")
@@ -407,11 +414,16 @@ Date: {datetime.now().strftime("%d/%m/%Y")}
 Score global: {st.session_state.score_global}/10
 Niveau: {st.session_state.niveau}
 Recommandation: {st.session_state.recommandation}
+
+Détails des scores:
+- Questionnaire: {st.session_state.score_questionnaire}/10
+- Analyse vocale: {st.session_state.score_audio}/10
+- Analyse visuelle: {st.session_state.score_vision}/10
         """
-        st.download_button("📄 Télécharger PDF", rapport, file_name=f"rapport_{st.session_state.nom_enfant}.txt")
+        st.download_button("📄 Télécharger le rapport", rapport, file_name=f"rapport_{st.session_state.nom_enfant}.txt")
     with col2:
         if st.button("📞 Contacter spécialiste"):
-            st.info("Liste des spécialistes près de chez vous")
+            st.info("📋 Liste des spécialistes recommandés dans votre région sera affichée ici")
     with col3:
         if st.button("🔄 Nouveau test"):
             for key in list(st.session_state.keys()):
@@ -420,7 +432,9 @@ Recommandation: {st.session_state.recommandation}
             st.session_state.etape = 1
             st.rerun()
 
-# ========== SIDEBAR: PARAMÈTRES ==========
+# ========== ÉTAPE 7: RECOMMANDATIONS (accessible dans le sidebar) ==========
+
+# ========== SIDEBAR: PARAMÈTRES + HISTORIQUE ==========
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2103/2103704.png", width=60)
     st.markdown("## ⚙️ Paramètres")
@@ -435,16 +449,26 @@ with st.sidebar:
     confidentialite = st.checkbox("🔒 Confidentialité")
     
     st.markdown("---")
-    st.markdown("### 📜 Historique")
+    st.markdown("### 📜 Historique des tests")
     
     if st.session_state.historique_tests:
-        for i, test in enumerate(st.session_state.historique_tests[-3:]):
-            st.markdown(f"- **Test {i+1}** : {test['score']}/10 ({test['niveau'].split()[1]})")
+        for i, test in enumerate(st.session_state.historique_tests):
+            with st.expander(f"Test {i+1} - {test['date']}"):
+                st.write(f"**Enfant:** {test['enfant']}")
+                st.write(f"**Score:** {test['score']}/10")
+                st.write(f"**Niveau:** {test['niveau']}")
     else:
         st.info("Aucun test effectué")
+    
+    st.markdown("---")
+    st.markdown("### 📊 Statistiques")
+    if st.session_state.historique_tests:
+        scores_list = [t['score'] for t in st.session_state.historique_tests]
+        st.write(f"**Moyenne des scores:** {sum(scores_list)/len(scores_list):.1f}/10")
+        st.write(f"**Nombre de tests:** {len(st.session_state.historique_tests)}")
     
     st.markdown("---")
     st.caption("© 2024 NeuroSense AI+ | v1.0")
 
 st.markdown("---")
-st.caption("⚠️ Application de détection précoce - Ne remplace pas un diagnostic médical professionnel")
+st.caption("⚠️ **Avertissement:** Cette application est un outil d'aide à la détection précoce. Elle ne remplace en aucun cas un diagnostic médical professionnel. Consultez toujours un spécialiste pour toute préoccupation concernant le développement de votre enfant.")
