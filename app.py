@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import random
+import json
+import os
 
 # ========== CONFIGURATION ==========
 st.set_page_config(
@@ -11,27 +13,59 @@ st.set_page_config(
     layout="wide"
 )
 
+# ========== FONCTION POUR SAUVEGARDER L'ÉTAPE ==========
+def sauvegarder_etape():
+    """Sauvegarde l'étape actuelle dans le fichier local"""
+    data = {
+        "etape": st.session_state.etape,
+        "nom_parent": st.session_state.nom_parent,
+        "age_parent": st.session_state.age_parent,
+        "nom_enfant": st.session_state.nom_enfant,
+        "sexe_enfant": st.session_state.sexe_enfant,
+        "historique_medical": st.session_state.historique_medical,
+        "type_utilisateur": st.session_state.type_utilisateur
+    }
+    with open("save_neurosense.json", "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+def charger_sauvegarde():
+    """Charge la sauvegarde si elle existe"""
+    if os.path.exists("save_neurosense.json"):
+        try:
+            with open("save_neurosense.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data
+        except:
+            return None
+    return None
+
 # ========== INITIALISATION ==========
 if 'etape' not in st.session_state:
-    st.session_state.etape = 1
-if 'nom_parent' not in st.session_state:
-    st.session_state.nom_parent = ""
-if 'age_parent' not in st.session_state:
-    st.session_state.age_parent = 0
-if 'nom_enfant' not in st.session_state:
-    st.session_state.nom_enfant = ""
-if 'sexe_enfant' not in st.session_state:
-    st.session_state.sexe_enfant = ""
-if 'historique' not in st.session_state:
-    st.session_state.historique = ""
+    # Essayer de charger une sauvegarde existante
+    sauvegarde = charger_sauvegarde()
+    if sauvegarde and sauvegarde.get("etape", 1) > 1:
+        st.session_state.etape = sauvegarde.get("etape", 1)
+        st.session_state.nom_parent = sauvegarde.get("nom_parent", "")
+        st.session_state.age_parent = sauvegarde.get("age_parent", 0)
+        st.session_state.nom_enfant = sauvegarde.get("nom_enfant", "")
+        st.session_state.sexe_enfant = sauvegarde.get("sexe_enfant", "")
+        st.session_state.historique_medical = sauvegarde.get("historique_medical", "")
+        st.session_state.type_utilisateur = sauvegarde.get("type_utilisateur", "")
+    else:
+        st.session_state.etape = 1
+        st.session_state.nom_parent = ""
+        st.session_state.age_parent = 0
+        st.session_state.nom_enfant = ""
+        st.session_state.sexe_enfant = ""
+        st.session_state.historique_medical = ""
+        st.session_state.type_utilisateur = ""
+
 if 'score_questionnaire' not in st.session_state:
     st.session_state.score_questionnaire = None
 if 'score_audio' not in st.session_state:
     st.session_state.score_audio = None
 if 'score_vision' not in st.session_state:
     st.session_state.score_vision = None
-if 'historique_tests' not in st.session_state:
-    st.session_state.historique_tests = []
 if 'reponses' not in st.session_state:
     st.session_state.reponses = []
 
@@ -46,6 +80,21 @@ st.markdown("""
 <hr>
 """, unsafe_allow_html=True)
 
+# ========== AFFICHAGE DE LA PROGRESSION ==========
+if st.session_state.etape > 1:
+    etapes = ["Choix du profil", "Profil enfant", "Analyse IA", "Résultats"]
+    current = st.session_state.etape - 1
+    cols = st.columns(4)
+    for i, (col, etape) in enumerate(zip(cols, etapes)):
+        with col:
+            if i < current:
+                st.markdown(f"✅ {etape}")
+            elif i == current:
+                st.markdown(f"🔵 **{etape}**")
+            else:
+                st.markdown(f"⚪ {etape}")
+    st.markdown("---")
+
 # ========== ÉTAPE 1: CHOIX DU PROFIL ==========
 if st.session_state.etape == 1:
     st.header("1. 📋 Choix du profil")
@@ -53,31 +102,17 @@ if st.session_state.etape == 1:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    border-radius: 15px; padding: 1.5rem; text-align: center; color: white;">
-            <h2 style="margin:0;">👨‍👩‍👦</h2>
-            <h3>Parent</h3>
-            <p>Pour les familles</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Choisir Parent", key="btn_parent", use_container_width=True):
+        if st.button("👨‍👩‍👦 Parent", use_container_width=True):
             st.session_state.type_utilisateur = "Parent"
             st.session_state.etape = 2
+            sauvegarder_etape()
             st.rerun()
     
     with col2:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                    border-radius: 15px; padding: 1.5rem; text-align: center; color: white;">
-            <h2 style="margin:0;">⚕️</h2>
-            <h3>Professionnel</h3>
-            <p>Pour les spécialistes</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Choisir Professionnel", key="btn_pro", use_container_width=True):
+        if st.button("⚕️ Professionnel", use_container_width=True):
             st.session_state.type_utilisateur = "Professionnel"
             st.session_state.etape = 2
+            sauvegarder_etape()
             st.rerun()
 
 # ========== ÉTAPE 2: PROFIL DE L'ENFANT ==========
@@ -88,29 +123,48 @@ elif st.session_state.etape == 2:
         col1, col2 = st.columns(2)
         
         with col1:
-            nom_parent = st.text_input("Nom du parent / Professionnel")
-            age_parent = st.number_input("Âge", min_value=1, max_value=100, step=1)
+            nom_parent = st.text_input("Nom du parent / Professionnel", value=st.session_state.nom_parent)
+            age_parent = st.number_input("Âge", min_value=18, max_value=100, step=1, value=st.session_state.age_parent)
         
         with col2:
-            nom_enfant = st.text_input("Prénom de l'enfant")
-            sexe_enfant = st.selectbox("Sexe", ["Garçon", "Fille", "Autre"])
+            nom_enfant = st.text_input("Nom de l'enfant", value=st.session_state.nom_enfant)
+            sexe_enfant = st.selectbox("Sexe", ["Garçon", "Fille", "Autre"], 
+                                       index=["Garçon", "Fille", "Autre"].index(st.session_state.sexe_enfant) if st.session_state.sexe_enfant in ["Garçon", "Fille", "Autre"] else 0)
+        
+        historique = st.text_area("Historique médical (optionnel)", 
+                                  value=st.session_state.historique_medical,
+                                  placeholder="Antécédents médicaux, naissance prématurée...")
+        
         submitted = st.form_submit_button("📝 Continuer", use_container_width=True)
+        
         if submitted:
             if nom_parent and nom_enfant:
                 st.session_state.nom_parent = nom_parent
                 st.session_state.age_parent = age_parent
                 st.session_state.nom_enfant = nom_enfant
                 st.session_state.sexe_enfant = sexe_enfant
-                st.session_state.historique = historique
+                st.session_state.historique_medical = historique
                 st.session_state.etape = 3
+                sauvegarder_etape()
                 st.rerun()
             else:
                 st.error("Veuillez remplir tous les champs obligatoires")
+    
+    # Bouton pour recommencer
+    if st.button("🔄 Recommencer depuis le début"):
+        if os.path.exists("save_neurosense.json"):
+            os.remove("save_neurosense.json")
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
 # ========== ÉTAPE 3: ANALYSE IA ==========
 elif st.session_state.etape == 3:
     st.header("3. 🤖 Analyse IA")
-    st.info(f"👋 Bienvenue {st.session_state.nom_parent} ! Analyse pour {st.session_state.nom_enfant}")
+    st.info(f"Bienvenue {st.session_state.nom_parent} ! Analyse pour {st.session_state.nom_enfant}")
+    
+    # Sauvegarde de l'étape
+    sauvegarder_etape()
     
     # Création des onglets
     tab1, tab2, tab3 = st.tabs(["📝 Questionnaire (15 questions)", "🎙️ Analyse vocale", "👁️ Vision par ordinateur"])
@@ -207,7 +261,7 @@ elif st.session_state.etape == 3:
     # ===== TAB 2: AUDIO =====
     with tab2:
         st.subheader("🎙️ Analyse vocale")
-        st.markdown("Enregistrez la voix de l'enfant")
+        st.markdown("Enregistrez la voix de l'enfant pendant quelques secondes")
         
         uploaded_audio = st.file_uploader("Télécharger un fichier audio", type=["wav", "mp3", "m4a"])
         
@@ -226,7 +280,7 @@ elif st.session_state.etape == 3:
     # ===== TAB 3: VISION =====
     with tab3:
         st.subheader("👁️ Vision par ordinateur")
-        st.markdown("Prenez une photo de l'enfant")
+        st.markdown("Prenez une photo de l'enfant face à la caméra")
         
         camera_image = st.camera_input("Prendre une photo")
         
@@ -260,24 +314,17 @@ elif st.session_state.etape == 3:
                 st.session_state.score_global = round(score_global, 1)
                 
                 if st.session_state.score_global < 4:
-                    st.session_state.niveau = "🟢 Faible"
+                    st.session_state.niveau = "🟢 Niveau : Faible"
                     st.session_state.recommandation = "Développement typique. Surveillance standard."
                 elif st.session_state.score_global < 7:
-                    st.session_state.niveau = "🟠 Moyen"
+                    st.session_state.niveau = "🟠 Niveau : Moyen"
                     st.session_state.recommandation = "Quelques signes d'alerte. Consultez un spécialiste."
                 else:
-                    st.session_state.niveau = "🔴 Élevé"
+                    st.session_state.niveau = "🔴 Niveau : Élevé"
                     st.session_state.recommandation = "Signes évocateurs de TSA. Intervention précoce recommandée."
                 
-                test_result = {
-                    "date": datetime.now().strftime("%d/%m/%Y"),
-                    "score": st.session_state.score_global,
-                    "niveau": st.session_state.niveau,
-                    "enfant": st.session_state.nom_enfant
-                }
-                st.session_state.historique_tests.append(test_result)
-                
                 st.session_state.etape = 4
+                sauvegarder_etape()
                 st.rerun()
             else:
                 st.warning("Veuillez compléter le questionnaire avant de continuer")
@@ -293,36 +340,36 @@ elif st.session_state.etape == 4:
     
     with col2:
         if "Faible" in st.session_state.niveau:
-            st.success(f"Niveau: {st.session_state.niveau}")
+            st.success(st.session_state.niveau)
         elif "Moyen" in st.session_state.niveau:
-            st.warning(f"Niveau: {st.session_state.niveau}")
+            st.warning(st.session_state.niveau)
         else:
-            st.error(f"Niveau: {st.session_state.niveau}")
+            st.error(st.session_state.niveau)
     
     with col3:
         st.progress(st.session_state.score_global / 10)
     
     st.markdown("---")
     
-    st.subheader("Détail des scores")
+    st.subheader("Détail des scores par modalité")
     
     col_a, col_b, col_c = st.columns(3)
     with col_a:
-        st.info(f"**Questionnaire**\n\n{st.session_state.score_questionnaire}/10")
+        st.info(f"**📝 Questionnaire**\n\n{st.session_state.score_questionnaire}/10")
     with col_b:
-        st.info(f"**Analyse vocale**\n\n{st.session_state.score_audio}/10")
+        st.info(f"**🎙️ Analyse vocale**\n\n{st.session_state.score_audio}/10")
     with col_c:
-        st.info(f"**Analyse visuelle**\n\n{st.session_state.score_vision}/10")
+        st.info(f"**📷 Analyse visuelle**\n\n{st.session_state.score_vision}/10")
     
     st.markdown("---")
     
     st.subheader("💡 Recommandation")
     if "Faible" in st.session_state.niveau:
-        st.success(st.session_state.recommandation)
+        st.success(f"✅ {st.session_state.recommandation}")
     elif "Moyen" in st.session_state.niveau:
-        st.warning(st.session_state.recommandation)
+        st.warning(f"⚠️ {st.session_state.recommandation}")
     else:
-        st.error(st.session_state.recommandation)
+        st.error(f"🔴 {st.session_state.recommandation}")
     
     st.markdown("---")
     
@@ -337,34 +384,47 @@ Date: {datetime.now().strftime("%d/%m/%Y")}
 Score global: {st.session_state.score_global}/10
 Niveau: {st.session_state.niveau}
 Recommandation: {st.session_state.recommandation}
+
+Détails des scores:
+- Questionnaire: {st.session_state.score_questionnaire}/10
+- Analyse vocale: {st.session_state.score_audio}/10
+- Analyse visuelle: {st.session_state.score_vision}/10
         """
-        st.download_button("📄 Télécharger", rapport, file_name="rapport.txt")
+        st.download_button("📄 Télécharger le rapport", rapport, file_name=f"rapport_{st.session_state.nom_enfant}.txt")
     
- 
-    with co12:
-        if st.button("🔄 Nouveau test"):
+    with col2:
+        if st.button("📞 Contacter un spécialiste"):
+            st.info("📋 Liste des spécialistes dans votre région")
+    
+    with col3:
+        if st.button("🔄 Nouvelle évaluation"):
+            if os.path.exists("save_neurosense.json"):
+                os.remove("save_neurosense.json")
             for key in list(st.session_state.keys()):
-                if key not in ['historique_tests']:
-                    del st.session_state[key]
-            st.session_state.etape = 1
+                del st.session_state[key]
             st.rerun()
 
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.markdown("## ⚙️ Paramètres")
-    st.selectbox("Langue", ["Français", "English", "العربية"])
-    st.toggle("Notifications")
-    st.checkbox("Confidentialité")
+    langue = st.selectbox("🌐 Langue", ["Français", "English", "العربية"])
+    notifications = st.toggle("🔔 Notifications")
+    confidentialite = st.checkbox("🔒 Confidentialité")
     
     st.markdown("---")
-    st.markdown("## 📜 Historique")
     
-    if st.session_state.historique_tests:
-        for test in st.session_state.historique_tests[-3:]:
-            st.write(f"📅 {test['date']}: {test['score']}/10")
-    else:
-        st.info("Aucun test")
+    # Afficher l'étape actuelle sauvegardée
+    if st.session_state.etape > 1:
+        st.info(f"💾 **Progression sauvegardée**\n\nÉtape: {st.session_state.etape}/4")
+        if st.button("🗑️ Effacer la sauvegarde"):
+            if os.path.exists("save_neurosense.json"):
+                os.remove("save_neurosense.json")
+            st.success("Sauvegarde effacée !")
+            st.rerun()
+    
+    st.markdown("---")
+    st.caption("© 2024 NeuroSense AI+")
 
 # ========== FOOTER ==========
 st.markdown("---")
-st.caption("⚠️ **Avertissement:** Cette application est un outil d'aide à la détection précoce. Elle ne remplace en aucun cas un diagnostic médical professionnel. Consultez toujours un spécialiste pour toute préoccupation concernant le développement de votre enfant.")
+st.caption("⚠️ **Avertissement:** Cette application est un outil d'aide à la détection précoce. Elle ne remplace en aucun cas un diagnostic médical professionnel.")
