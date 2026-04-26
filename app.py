@@ -89,7 +89,7 @@ elif st.session_state.etape == 2:
         
         with col1:
             nom_parent = st.text_input("Nom du parent / Professionnel")
-            age_parent = st.number_input("Âge", min_value=18, max_value=100, step=1)
+            age_parent = st.number_input("Âge", min_value=1, max_value=100, step=1)
         
         with col2:
             nom_enfant = st.text_input("Prénom de l'enfant")
@@ -345,11 +345,8 @@ Recommandation: {st.session_state.recommandation}
         """
         st.download_button("📄 Télécharger", rapport, file_name="rapport.txt")
     
-    with col2:
-        if st.button("📞 Contacter spécialiste"):
-            st.info("Liste des spécialistes dans votre région")
-    
-    with col3:
+ 
+    with co12:
         if st.button("🔄 Nouveau test"):
             for key in list(st.session_state.keys()):
                 if key not in ['historique_tests']:
