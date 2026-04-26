@@ -95,7 +95,6 @@ elif st.session_state.etape == 2:
             nom_enfant = st.text_input("Prénom de l'enfant")
             sexe_enfant = st.selectbox("Sexe", ["Garçon", "Fille", "Autre"])
         submitted = st.form_submit_button("📝 Continuer", use_container_width=True)
-        
         if submitted:
             if nom_parent and nom_enfant:
                 st.session_state.nom_parent = nom_parent
