@@ -94,10 +94,6 @@ elif st.session_state.etape == 2:
         with col2:
             nom_enfant = st.text_input("Prénom de l'enfant")
             sexe_enfant = st.selectbox("Sexe", ["Garçon", "Fille", "Autre"])
-        
-        historique = st.text_area("Historique médical (optionnel)", 
-                                  placeholder="Antécédents médicaux, naissance prématurée...")
-        
         submitted = st.form_submit_button("📝 Continuer", use_container_width=True)
         
         if submitted:
