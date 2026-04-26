@@ -89,30 +89,8 @@ elif st.session_state.etape == 2:
             else:
                 st.error("Veuillez remplir tous les champs obligatoires")
 
-# ========== ÉTAPE 3: TEST INTELLIGENT ==========
-elif st.session_state.etape == 3:
-    st.header("3. 🧪 Test intelligent")
-    st.markdown("Cliquez sur le bouton ci-dessous pour lancer l'analyse complète")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🚀 LANCER ANALYSE", type="primary", use_container_width=True):
-            st.session_state.etape = 4
-            st.rerun()
 
-# ========== ÉTAPE 4: DÉTECTION INTELLIGENTE ==========
-elif st.session_state.etape == 4:
-    st.header("4. 🧠 Détection intelligente et précoce du TSA grâce à l'IA")
-    
-    st.info("L'intelligence artificielle analyse les données en temps réel...")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🎯 COMMENCER", type="primary", use_container_width=True):
-            st.session_state.etape = 5
-            st.rerun()
-
-# ========== ÉTAPE 5: ANALYSE IA (Questionnaire + Audio + Vision) ==========
+# ========== ÉTAPE 3: ANALYSE IA (Questionnaire + Audio + Vision) ==========
 elif st.session_state.etape == 5:
     st.header("5. 🤖 Analyse IA")
     
