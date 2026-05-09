@@ -203,7 +203,7 @@ elif st.session_state.etape == 2:
                                                         help="Pour les enfants de 0 à 6 ans (72 mois)")
         st.session_state.sexe_enfant = st.selectbox("⚥ Sexe de l'enfant", ["", "Masculin", "Féminin"])
 
-    col1, col2, col3 = st.columns([1,1,1])
+    col1, col2 = st.columns([1,1])
     with col2:
         if st.button("➡️ Suivant", use_container_width=True):
             if st.session_state.nom_parent and st.session_state.age_parent > 0 and st.session_state.nom_enfant:
