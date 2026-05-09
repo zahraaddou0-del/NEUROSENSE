@@ -5,9 +5,22 @@ from datetime import datetime
 import random
 import plotly.express as px
 import plotly.graph_objects as go
-import audio_recorder_streamlit as ar
 from PIL import Image
-import cv2
+import io
+
+# محاولة استيراد المكتبات الصوتية مع التعامل مع الأخطاء
+try:
+    import streamlit.components.v1 as components
+    AUDIO_AVAILABLE = True
+except:
+    AUDIO_AVAILABLE = False
+
+# محاولة استيراد OpenCV للفيديو
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except:
+    CV2_AVAILABLE = False
 
 # ========== PAGE CONFIGURATION ==========
 st.set_page_config(
@@ -66,6 +79,14 @@ st.markdown("""
         color: white;
         border: 2px dashed #667eea;
     }
+    .audio-placeholder {
+        background: #2d2d4a;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #667eea;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -106,6 +127,10 @@ if 'audio_uploaded' not in st.session_state:
     st.session_state.audio_uploaded = False
 if 'video_uploaded' not in st.session_state:
     st.session_state.video_uploaded = False
+if 'audio_analyzed' not in st.session_state:
+    st.session_state.audio_analyzed = False
+if 'video_analyzed' not in st.session_state:
+    st.session_state.video_analyzed = False
 
 # ========== EN-TÊTE ==========
 st.markdown("""
@@ -165,7 +190,7 @@ if st.session_state.etape == 1:
             st.session_state.etape = 2
             st.rerun()
 
-# ========== ÉTAPE 2: INFORMATIONS (MODIFIÉE) ==========
+# ========== ÉTAPE 2: INFORMATIONS ==========
 elif st.session_state.etape == 2:
     st.markdown("## 👤 Étape 2: Vos informations")
     st.markdown("---")
@@ -206,24 +231,24 @@ elif st.session_state.etape == 2:
                 st.session_state.etape = 3
                 st.rerun()
             else:
-                st.error("Veuillez remplir tous les champs obligatoires (Nom parent, Âge, Nom enfant)")
+                st.error("Veuillez remplir tous les champs obligatoires")
 
 # ========== ÉTAPE 3: QUESTIONNAIRE ==========
 elif st.session_state.etape == 3:
     st.markdown("## 📝 Étape 3: Questionnaire d'évaluation")
     st.markdown("---")
-    st.info("Veuillez répondre aux questions suivantes en fonction du comportement de votre enfant au cours des 3 derniers mois.")
+    st.info("Veuillez répondre aux questions suivantes en fonction du comportement de votre enfant.")
     
     questions = [
         "👁️ Votre enfant regarde-t-il dans les yeux?",
         "🔊 Votre enfant réagit-il quand on appelle son nom?",
         "👉 Votre enfant pointe-t-il du doigt pour montrer quelque chose?",
-        "🧸 Votre enfant joue-t-il à faire semblant? (ex: donner à manger à une poupée)",
+        "🧸 Votre enfant joue-t-il à faire semblant?",
         "🚫 Votre enfant évite-t-il le contact visuel?",
-        "🔄 Votre enfant a-t-il des comportements répétitifs? (ex: se balance, tourne en rond)",
-        "😊 Votre enfant partage-t-il son plaisir avec vous? (ex: vous montre un jouet)",
+        "🔄 Votre enfant a-t-il des comportements répétitifs?",
+        "😊 Votre enfant partage-t-il son plaisir?",
         "😢 Votre enfant semble-t-il insensible à la douleur?",
-        "👂 Votre enfant a-t-il des sensibilités aux bruits ou textures?",
+        "👂 Votre enfant a-t-il des sensibilités aux bruits?",
         "🗣️ Votre enfant utilise-t-il des mots ou phrases?"
     ]
     
@@ -248,15 +273,15 @@ elif st.session_state.etape == 3:
             st.session_state.etape = 4
             st.rerun()
 
-# ========== ÉTAPE 4: ANALYSE AUDIO & VIDÉO (AJOUTÉE) ==========
+# ========== ÉTAPE 4: ANALYSE AUDIO & VIDÉO (VERSION CORRIGÉE SANS LIBRAIRIE PROBLÉMATIQUE) ==========
 elif st.session_state.etape == 4:
     st.markdown("## 🎤 Étape 4: Analyse Audio et Vidéo")
     st.markdown("---")
     
     st.info("""
     ### 📋 Instructions:
-    1. **Analyse Audio** : Enregistrez ou téléchargez la voix de votre enfant
-    2. **Analyse Vidéo** : Enregistrez ou téléchargez une vidéo de votre enfant jouant ou interagissant
+    1. **Analyse Audio** : Téléchargez un fichier audio de la voix de votre enfant
+    2. **Analyse Vidéo** : Téléchargez une vidéo de votre enfant jouant ou interagissant
     """)
     
     col1, col2 = st.columns(2)
@@ -265,174 +290,136 @@ elif st.session_state.etape == 4:
     with col1:
         st.markdown("### 🎙️ Analyse Audio")
         
-        tab1, tab2 = st.tabs(["🎤 Enregistrer", "📁 Télécharger"])
+        st.markdown("**Télécharger un fichier audio:**")
+        audio_file = st.file_uploader("Choisir un fichier audio (MP3, WAV, M4A)", type=["wav", "mp3", "m4a"], key="audio_upload")
         
-        with tab1:
-            st.markdown("**Enregistrement vocal:**")
-            audio_bytes = ar.audio_recorder(
-                text="Cliquez pour enregistrer",
-                recording_color="#ff0000",
-                neutral_color="#667eea",
-                icon_size="2x"
-            )
+        if audio_file:
+            st.audio(audio_file)
+            st.success(f"✅ Fichier chargé: {audio_file.name}")
+            st.session_state.audio_uploaded = True
             
-            if audio_bytes:
-                st.audio(audio_bytes, format="audio/wav")
-                st.success("✅ Audio enregistré avec succès!")
-                st.session_state.audio_uploaded = True
+            if st.button("🎵 Analyser l'audio", key="analyze_audio_btn", use_container_width=True):
+                with st.spinner("🔍 Analyse de la voix en cours..."):
+                    import time
+                    time.sleep(2)
+                
+                # Simulation des scores audio
+                scores_audio = {
+                    "Prosodie (intonation)": random.randint(40, 95),
+                    "Clarté articulatoire": random.randint(45, 98),
+                    "Variabilité vocale": random.randint(50, 100),
+                    "Réponse sonore": random.randint(35, 90)
+                }
+                
+                for metric, score in scores_audio.items():
+                    st.progress(score/100, text=f"{metric}: {score}%")
+                    time.sleep(0.3)
+                
+                score_audio_total = int(np.mean(list(scores_audio.values())))
+                st.session_state.score_audio = score_audio_total
+                st.session_state.audio_analyzed = True
+                
+                st.metric("🎵 Score vocal global", f"{score_audio_total}%")
         
-        with tab2:
-            st.markdown("**Télécharger un fichier audio:**")
-            audio_file = st.file_uploader("Choisir un fichier", type=["wav", "mp3", "m4a"], key="audio")
-            if audio_file:
-                st.audio(audio_file)
-                st.success(f"✅ Fichier chargé: {audio_file.name}")
-                st.session_state.audio_uploaded = True
-        
-        # Simulation du score audio
-        if st.session_state.audio_uploaded:
+        # Affichage du résultat audio si déjà analysé
+        if st.session_state.audio_analyzed and st.session_state.score_audio:
             st.markdown("---")
-            st.markdown("**📊 Analyse en temps réel:**")
-            
-            with st.spinner("Analyse de la voix en cours..."):
-                import time
-                time.sleep(1.5)
-            
-            # Simulation des scores
-            scores_audio = {
-                "Prosodie (intonation)": random.randint(40, 95),
-                "Clarté articulatoire": random.randint(45, 98),
-                "Variabilité vocale": random.randint(50, 100),
-                "Réponse sonore": random.randint(35, 90)
-            }
-            
-            for metric, score in scores_audio.items():
-                st.progress(score/100, text=f"{metric}: {score}%")
-                time.sleep(0.3)
-            
-            score_audio_total = int(np.mean(list(scores_audio.values())))
-            st.session_state.score_audio = score_audio_total
-            
-            st.metric("🎵 Score vocal global", f"{score_audio_total}%")
+            st.markdown(f"**✅ Audio analysé - Score: {st.session_state.score_audio}%**")
     
     # ========== COLONNE 2: ANALYSE VIDÉO ==========
     with col2:
         st.markdown("### 🎥 Analyse Vidéo")
         
-        tab3, tab4 = st.tabs(["🎥 Enregistrer", "📁 Télécharger"])
+        st.markdown("**Télécharger une vidéo:**")
+        video_file = st.file_uploader("Choisir une vidéo (MP4, AVI, MOV)", type=["mp4", "avi", "mov"], key="video_upload")
         
-        with tab3:
-            st.markdown("**Enregistrement vidéo (Eye Tracking):**")
+        if video_file:
+            st.video(video_file)
+            st.success(f"✅ Vidéo chargée: {video_file.name}")
+            st.session_state.video_uploaded = True
             
-            # Simuler une capture vidéo (Webcam)
-            use_webcam = st.checkbox("Utiliser la webcam", key="use_webcam")
-            
-            if use_webcam:
-                st.warning("⚠️ Dans un environnement réel, la webcam s'activerait pour suivre les mouvements oculaires.")
+            if st.button("👁️ Analyser la vidéo", key="analyze_video_btn", use_container_width=True):
+                with st.spinner("🔍 Analyse des mouvements et du regard en cours..."):
+                    import time
+                    time.sleep(2)
                 
-                # Placeholder pour la webcam
-                st.markdown("""
-                <div class="video-placeholder">
-                    <div style="font-size: 3rem;">🎥</div>
-                    <p>📷 Webcam activée - Tracking des yeux en cours...</p>
-                    <p style="font-size: 0.8rem;">👁️ Points de fixation: 12 | 👀 Temps de regard: 3.2s</p>
-                </div>
-                """, unsafe_allow_html=True)
+                # Simulation des scores vidéo
+                scores_vision = {
+                    "👁️ Fixation sur les yeux": random.randint(30, 90),
+                    "🎯 Attention conjointe": random.randint(40, 95),
+                    "🔄 Poursuite visuelle": random.randint(50, 100),
+                    "😊 Reconnaissance émotions": random.randint(35, 85)
+                }
                 
-                if st.button("📸 Capturer et analyser", key="capture_btn"):
-                    with st.spinner("Analyse du regard en cours..."):
-                        import time
-                        time.sleep(2)
-                    st.success("Analyse terminée!")
-                    st.session_state.video_uploaded = True
+                # Graphique radar
+                fig = go.Figure(data=go.Scatterpolar(
+                    r=list(scores_vision.values()),
+                    theta=list(scores_vision.keys()),
+                    fill='toself',
+                    marker=dict(color='rgba(102, 126, 234, 0.8)'),
+                    line=dict(color='rgba(102, 126, 234, 1)', width=2)
+                ))
+                
+                fig.update_layout(
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+                    showlegend=False,
+                    height=300,
+                    margin=dict(l=40, r=40, t=20, b=20)
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                for metric, score in scores_vision.items():
+                    st.progress(score/100, text=f"{metric}: {score}%")
+                    time.sleep(0.3)
+                
+                score_vision_total = int(np.mean(list(scores_vision.values())))
+                st.session_state.score_vision = score_vision_total
+                st.session_state.video_analyzed = True
+                
+                st.metric("👁️ Score Eye Tracking global", f"{score_vision_total}%")
         
-        with tab4:
-            st.markdown("**Télécharger une vidéo:**")
-            video_file = st.file_uploader("Choisir une vidéo", type=["mp4", "avi", "mov"], key="video")
-            if video_file:
-                st.video(video_file)
-                st.success(f"✅ Vidéo chargée: {video_file.name}")
-                
-                if st.button("🔍 Analyser la vidéo", key="analyze_video"):
-                    with st.spinner("Analyse des mouvements et du regard en cours..."):
-                        import time
-                        time.sleep(2)
-                    st.success("Analyse terminée!")
-                    st.session_state.video_uploaded = True
-        
-        # Simulation du score vidéo
-        if st.session_state.video_uploaded:
+        # Affichage du résultat vidéo si déjà analysé
+        if st.session_state.video_analyzed and st.session_state.score_vision:
             st.markdown("---")
-            st.markdown("**📊 Analyse Eye Tracking:**")
-            
-            with st.spinner("Analyse des mouvements oculaires en cours..."):
-                import time
-                time.sleep(1.5)
-            
-            scores_vision = {
-                "👁️ Fixation sur les yeux": random.randint(30, 90),
-                "🎯 Attention conjointe": random.randint(40, 95),
-                "🔄 Poursuite visuelle": random.randint(50, 100),
-                "😊 Reconnaissance émotions": random.randint(35, 85)
-            }
-            
-            # Graphique radar
-            fig = go.Figure(data=go.Scatterpolar(
-                r=list(scores_vision.values()),
-                theta=list(scores_vision.keys()),
-                fill='toself',
-                marker=dict(color='rgba(102, 126, 234, 0.8)'),
-                line=dict(color='rgba(102, 126, 234, 1)', width=2)
-            ))
-            
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                showlegend=False,
-                height=300,
-                margin=dict(l=40, r=40, t=20, b=20)
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            for metric, score in scores_vision.items():
-                st.progress(score/100, text=f"{metric}: {score}%")
-                time.sleep(0.3)
-            
-            score_vision_total = int(np.mean(list(scores_vision.values())))
-            st.session_state.score_vision = score_vision_total
-            
-            st.metric("👁️ Score Eye Tracking global", f"{score_vision_total}%")
+            st.markdown(f"**✅ Vidéo analysée - Score: {st.session_state.score_vision}%**")
     
     # Bouton suivant
     st.markdown("---")
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
         if st.button("➡️ Générer le rapport final", use_container_width=True):
-            if st.session_state.audio_uploaded and st.session_state.video_uploaded:
+            if st.session_state.audio_analyzed and st.session_state.video_analyzed:
                 # Calcul du score global
-                if st.session_state.score_audio and st.session_state.score_vision and st.session_state.score_questionnaire:
-                    scores = [st.session_state.score_questionnaire * 5, st.session_state.score_audio, st.session_state.score_vision]
-                    st.session_state.score_global = int(np.mean(scores))
-                    st.session_state.pourcentage = st.session_state.score_global
-                    
-                    # Déterminer le risque
-                    if st.session_state.pourcentage >= 70:
-                        st.session_state.niveau = "🔴 Risque Élevé"
-                        st.session_state.recommandation = "Consultation avec un spécialiste recommandée dès que possible."
-                    elif st.session_state.pourcentage >= 50:
-                        st.session_state.niveau = "🟠 Risque Modéré"
-                        st.session_state.recommandation = "Surveillance attentive et consultation recommandée."
-                    elif st.session_state.pourcentage >= 30:
-                        st.session_state.niveau = "🟡 Risque Faible"
-                        st.session_state.recommandation = "Continuer à observer le développement normal."
-                    else:
-                        st.session_state.niveau = "🟢 Risque Très Faible"
-                        st.session_state.recommandation = "Développement typique, continuez le suivi normal."
-                    
-                    st.session_state.etape = 5
-                    st.rerun()
+                scores = [
+                    (st.session_state.score_questionnaire / 20) * 100,
+                    st.session_state.score_audio,
+                    st.session_state.score_vision
+                ]
+                st.session_state.score_global = int(np.mean(scores))
+                st.session_state.pourcentage = st.session_state.score_global
+                
+                # Déterminer le risque
+                if st.session_state.pourcentage >= 70:
+                    st.session_state.niveau = "🔴 Risque Élevé"
+                    st.session_state.recommandation = "Consultation avec un spécialiste recommandée dès que possible."
+                elif st.session_state.pourcentage >= 50:
+                    st.session_state.niveau = "🟠 Risque Modéré"
+                    st.session_state.recommandation = "Surveillance attentive et consultation recommandée."
+                elif st.session_state.pourcentage >= 30:
+                    st.session_state.niveau = "🟡 Risque Faible"
+                    st.session_state.recommandation = "Continuer à observer le développement normal."
+                else:
+                    st.session_state.niveau = "🟢 Risque Très Faible"
+                    st.session_state.recommandation = "Développement typique, continuez le suivi normal."
+                
+                st.session_state.etape = 5
+                st.rerun()
             else:
-                st.error("Veuillez compléter l'analyse audio ET l'analyse vidéo avant de continuer")
+                if not st.session_state.audio_analyzed:
+                    st.error("❌ Veuillez d'abord analyser le fichier audio")
+                if not st.session_state.video_analyzed:
+                    st.error("❌ Veuillez d'abord analyser la vidéo")
 
 # ========== ÉTAPE 5: RAPPORT FINAL ==========
 elif st.session_state.etape == 5:
