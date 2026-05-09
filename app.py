@@ -7,15 +7,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from PIL import Image
 import io
-
-# محاولة استيراد المكتبات الصوتية مع التعامل مع الأخطاء
 try:
     import streamlit.components.v1 as components
     AUDIO_AVAILABLE = True
 except:
     AUDIO_AVAILABLE = False
 
-# محاولة استيراد OpenCV للفيديو
 try:
     import cv2
     CV2_AVAILABLE = True
@@ -199,31 +196,13 @@ elif st.session_state.etape == 2:
     
     with col1:
         st.session_state.nom_parent = st.text_input("📝 Votre nom complet", placeholder="Ex: Marie Dupont")
-        st.session_state.age_parent = st.number_input("🎂 Votre âge", min_value=18, max_value=100, step=1)
         st.session_state.nom_enfant = st.text_input("👶 Nom de l'enfant", placeholder="Ex: Lucas")
     
     with col2:
-        st.session_state.age_enfant = st.number_input("📅 Âge de l'enfant (en mois)", min_value=0, max_value=72, step=1,
+        st.session_state.age_enfant = st.number_input("📅 Âge de l'enfant", min_value=0, max_value=72, step=1,
                                                         help="Pour les enfants de 0 à 6 ans (72 mois)")
         st.session_state.sexe_enfant = st.selectbox("⚥ Sexe de l'enfant", ["", "Masculin", "Féminin"])
-    
-    # Antécédents familiaux
-    st.markdown("---")
-    st.markdown("### 🧬 Antécédents familiaux")
-    
-    antecedents_options = st.multiselect(
-        "Sélectionnez les antécédents familiaux présents:",
-        ["Autisme (diagnostiqué)", "Autisme (suspicion)", "TDAH", "Trouble du langage", 
-         "Retard de développement", "Épilepsie", "Trouble anxieux", "Aucun antécédent connu"]
-    )
-    
-    autre_antecedent = st.text_input("Autre (précisez):", placeholder="Ex: Syndrome de Asperger")
-    
-    if autre_antecedent:
-        antecedents_options.append(autre_antecedent)
-    
-    st.session_state.antecedents = ", ".join(antecedents_options) if antecedents_options else "Aucun signalé"
-    
+
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
         if st.button("➡️ Suivant", use_container_width=True):
