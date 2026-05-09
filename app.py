@@ -7,6 +7,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from PIL import Image
 import io
+import time
+
+# محاولة استيراد المكتبات الإضافية مع التعامل مع الأخطاء
 try:
     import streamlit.components.v1 as components
     AUDIO_AVAILABLE = True
@@ -68,22 +71,6 @@ st.markdown("""
         border-top: 1px solid #ddd;
         margin-top: 40px;
     }
-    .video-placeholder {
-        background: #1a1a2e;
-        border-radius: 15px;
-        padding: 20px;
-        text-align: center;
-        color: white;
-        border: 2px dashed #667eea;
-    }
-    .audio-placeholder {
-        background: #2d2d4a;
-        border-radius: 15px;
-        padding: 20px;
-        text-align: center;
-        border: 1px solid #667eea;
-        margin: 10px 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,16 +81,12 @@ if 'type_utilisateur' not in st.session_state:
     st.session_state.type_utilisateur = ""
 if 'nom_parent' not in st.session_state:
     st.session_state.nom_parent = ""
-if 'age_parent' not in st.session_state:
-    st.session_state.age_parent = 0
 if 'nom_enfant' not in st.session_state:
     st.session_state.nom_enfant = ""
 if 'age_enfant' not in st.session_state:
     st.session_state.age_enfant = 0
 if 'sexe_enfant' not in st.session_state:
     st.session_state.sexe_enfant = ""
-if 'antecedents' not in st.session_state:
-    st.session_state.antecedents = ""
 if 'score_questionnaire' not in st.session_state:
     st.session_state.score_questionnaire = None
 if 'score_audio' not in st.session_state:
@@ -140,8 +123,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========== PROGRESSION ==========
-if st.session_state.etape > 1 and st.session_state.etape < 7:
-    progression = (st.session_state.etape - 1) / 6 * 100
+if st.session_state.etape > 1 and st.session_state.etape < 6:
+    progression = (st.session_state.etape - 1) / 5 * 100
     st.markdown(f"""
     <div style="margin-bottom: 20px;">
         <p style="margin-bottom: 5px;">📊 Progression de l'évaluation</p>
@@ -187,7 +170,7 @@ if st.session_state.etape == 1:
             st.session_state.etape = 2
             st.rerun()
 
-# ========== ÉTAPE 2: INFORMATIONS ==========
+# ========== ÉTAPE 2: INFORMATIONS (SANS ANTÉCÉDENTS) ==========
 elif st.session_state.etape == 2:
     st.markdown("## 👤 Étape 2: Vos informations")
     st.markdown("---")
@@ -199,35 +182,35 @@ elif st.session_state.etape == 2:
         st.session_state.nom_enfant = st.text_input("👶 Nom de l'enfant", placeholder="Ex: Lucas")
     
     with col2:
-        st.session_state.age_enfant = st.number_input("📅 Âge de l'enfant", min_value=0, max_value=72, step=1,
+        st.session_state.age_enfant = st.number_input("📅 Âge de l'enfant (en mois)", min_value=0, max_value=72, step=1,
                                                         help="Pour les enfants de 0 à 6 ans (72 mois)")
         st.session_state.sexe_enfant = st.selectbox("⚥ Sexe de l'enfant", ["", "Masculin", "Féminin"])
-
-    col1, col2 = st.columns([1,1])
+    
+    col1, col2, col3 = st.columns([1,1,1])
     with col2:
         if st.button("➡️ Suivant", use_container_width=True):
-            if st.session_state.nom_parent and st.session_state.age_parent > 0 and st.session_state.nom_enfant:
+            if st.session_state.nom_parent and st.session_state.nom_enfant:
                 st.session_state.etape = 3
                 st.rerun()
             else:
-                st.error("Veuillez remplir tous les champs obligatoires")
+                st.error("❌ Veuillez remplir tous les champs obligatoires: Nom parent, Nom enfant")
 
 # ========== ÉTAPE 3: QUESTIONNAIRE ==========
 elif st.session_state.etape == 3:
     st.markdown("## 📝 Étape 3: Questionnaire d'évaluation")
     st.markdown("---")
-    st.info("Veuillez répondre aux questions suivantes en fonction du comportement de votre enfant.")
+    st.info("Veuillez répondre aux questions suivantes en fonction du comportement de votre enfant au cours des 3 derniers mois.")
     
     questions = [
         "👁️ Votre enfant regarde-t-il dans les yeux?",
         "🔊 Votre enfant réagit-il quand on appelle son nom?",
         "👉 Votre enfant pointe-t-il du doigt pour montrer quelque chose?",
-        "🧸 Votre enfant joue-t-il à faire semblant?",
+        "🧸 Votre enfant joue-t-il à faire semblant? (ex: donner à manger à une poupée)",
         "🚫 Votre enfant évite-t-il le contact visuel?",
-        "🔄 Votre enfant a-t-il des comportements répétitifs?",
-        "😊 Votre enfant partage-t-il son plaisir?",
+        "🔄 Votre enfant a-t-il des comportements répétitifs? (ex: se balance, tourne en rond)",
+        "😊 Votre enfant partage-t-il son plaisir avec vous? (ex: vous montre un jouet)",
         "😢 Votre enfant semble-t-il insensible à la douleur?",
-        "👂 Votre enfant a-t-il des sensibilités aux bruits?",
+        "👂 Votre enfant a-t-il des sensibilités aux bruits ou textures?",
         "🗣️ Votre enfant utilise-t-il des mots ou phrases?"
     ]
     
@@ -252,7 +235,7 @@ elif st.session_state.etape == 3:
             st.session_state.etape = 4
             st.rerun()
 
-# ========== ÉTAPE 4: ANALYSE AUDIO & VIDÉO (VERSION CORRIGÉE SANS LIBRAIRIE PROBLÉMATIQUE) ==========
+# ========== ÉTAPE 4: ANALYSE AUDIO & VIDÉO ==========
 elif st.session_state.etape == 4:
     st.markdown("## 🎤 Étape 4: Analyse Audio et Vidéo")
     st.markdown("---")
@@ -261,6 +244,7 @@ elif st.session_state.etape == 4:
     ### 📋 Instructions:
     1. **Analyse Audio** : Téléchargez un fichier audio de la voix de votre enfant
     2. **Analyse Vidéo** : Téléchargez une vidéo de votre enfant jouant ou interagissant
+    3. Cliquez sur "Analyser" pour chaque fichier
     """)
     
     col1, col2 = st.columns(2)
@@ -279,7 +263,6 @@ elif st.session_state.etape == 4:
             
             if st.button("🎵 Analyser l'audio", key="analyze_audio_btn", use_container_width=True):
                 with st.spinner("🔍 Analyse de la voix en cours..."):
-                    import time
                     time.sleep(2)
                 
                 # Simulation des scores audio
@@ -319,7 +302,6 @@ elif st.session_state.etape == 4:
             
             if st.button("👁️ Analyser la vidéo", key="analyze_video_btn", use_container_width=True):
                 with st.spinner("🔍 Analyse des mouvements et du regard en cours..."):
-                    import time
                     time.sleep(2)
                 
                 # Simulation des scores vidéo
@@ -458,15 +440,16 @@ elif st.session_state.etape == 5:
     
     with col2:
         st.markdown("### 📋 Détails de l'évaluation")
+        st.write(f"**Parent:** {st.session_state.nom_parent}")
         st.write(f"**Enfant:** {st.session_state.nom_enfant}")
-        st.write(f"**Âge:** {st.session_state.age_enfant} mois")
+        st.write(f"**Âge enfant:** {st.session_state.age_enfant} mois")
         st.write(f"**Sexe:** {st.session_state.sexe_enfant}")
-        st.write(f"**Antécédents:** {st.session_state.antecedents}")
     
     # Boutons
     col1, col2, col3 = st.columns([1,1,1])
     with col2:
         if st.button("🔄 Nouvelle évaluation", use_container_width=True):
+            # إعادة تعيين جميع المتغيرات
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
@@ -474,7 +457,8 @@ elif st.session_state.etape == 5:
 # ========== PIED DE PAGE ==========
 st.markdown("""
 <div class="footer">
-    <p>🧠 NeuroSense AI+ | 🤖 IA pour la détection précoce</p>
-    <p>⚠️ Ceci est un outil d'aide à la décision, pas un diagnostic médical</p>
+    <p>🧠 NeuroSense AI+ | 🤖 IA pour la détection précoce de l'autisme</p>
+    <p>⚠️ Ceci est un outil d'aide à la décision, pas un diagnostic médical professionnel</p>
+    <p>📧 Contact: support@neurosense.ai | Version 2.0</p>
 </div>
 """, unsafe_allow_html=True)
