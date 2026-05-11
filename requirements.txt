@@ -7,4 +7,4 @@ scikit-learn>=1.3.0
 plotly>=5.17.0
 joblib>=1.3.0
 Pillow>=10.0.0
-python download_github_data.py
+python-download_github_data.py
