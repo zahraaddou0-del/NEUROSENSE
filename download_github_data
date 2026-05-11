@@ -1,0 +1,122 @@
+# ============================================
+# download_github_data.py
+# تحميل بيانات التوحد من GitHub
+# ============================================
+
+import pandas as pd
+import urllib.request
+import os
+import zipfile
+import io
+
+# إنشاء مجلد للبيانات
+os.makedirs('data', exist_ok=True)
+
+print("=" * 60)
+print("📥 تحميل بيانات التوحد من مشاريع GitHub")
+print("=" * 60)
+
+# ============================================
+# المصدر 1: مشروع gokul427/AutismPrediction
+# ============================================
+print("\n📌 [1/4] تحميل من gokul427/AutismPrediction...")
+
+try:
+    # تحميل ملف التدريب (train.csv)
+    url_train = "https://raw.githubusercontent.com/gokul427/AutismPrediction/main/train.csv"
+    urllib.request.urlretrieve(url_train, 'data/gokul_train.csv')
+    df_train = pd.read_csv('data/gokul_train.csv')
+    print(f"   ✅ train.csv: {len(df_train)} عينة, {len(df_train.columns)} عمود")
+    
+    # تحميل ملف الاختبار (test.csv)
+    url_test = "https://raw.githubusercontent.com/gokul427/AutismPrediction/main/test.csv"
+    urllib.request.urlretrieve(url_test, 'data/gokul_test.csv')
+    df_test = pd.read_csv('data/gokul_test.csv')
+    print(f"   ✅ test.csv: {len(df_test)} عينة, {len(df_test.columns)} عمود")
+    
+except Exception as e:
+    print(f"   ❌ خطأ: {e}")
+
+# ============================================
+# المصدر 2: مشروع nagatejakachapuram
+# ============================================
+print("\n📌 [2/4] تحميل من nagatejakachapuram/Autism-Prediction-System-ML...")
+
+try:
+    url = "https://raw.githubusercontent.com/nagatejakachapuram/Autism-Prediction-System-ML/main/train.csv"
+    urllib.request.urlretrieve(url, 'data/nagateja_train.csv')
+    df = pd.read_csv('data/nagateja_train.csv')
+    print(f"   ✅ train.csv: {len(df)} عينة, {len(df.columns)} عمود")
+except Exception as e:
+    print(f"   ❌ خطأ: {e}")
+
+# ============================================
+# المصدر 3: مشروع Anvesh-3 (أكبر مجموعة)
+# ============================================
+print("\n📌 [3/4] تحميل من Anvesh-3/Autism-Prediction...")
+
+try:
+    url = "https://raw.githubusercontent.com/Anvesh-3/Autism-Prediction/main/autism_dataset.csv"
+    urllib.request.urlretrieve(url, 'data/anvesh_dataset.csv')
+    df = pd.read_csv('data/anvesh_dataset.csv')
+    print(f"   ✅ autism_dataset.csv: {len(df)} عينة, {len(df.columns)} عمود")
+    
+    # تحميل النموذج المدرب أيضاً (إذا احتجناه)
+    url_model = "https://raw.githubusercontent.com/Anvesh-3/Autism-Prediction/main/best_model.pkl"
+    urllib.request.urlretrieve(url_model, 'models/best_model.pkl')
+    print(f"   ✅ best_model.pkl: تم تحميل النموذج المدرب")
+    
+except Exception as e:
+    print(f"   ❌ خطأ: {e}")
+
+# ============================================
+# المصدر 4: مشروع MASANAMUTHU22
+# ============================================
+print("\n📌 [4/4] تحميل من MASANAMUTHU22/Autism...")
+
+try:
+    url = "https://raw.githubusercontent.com/MASANAMUTHU22/Autism/main/autism_dataset.csv"
+    urllib.request.urlretrieve(url, 'data/masanamuthu_dataset.csv')
+    df = pd.read_csv('data/masanamuthu_dataset.csv')
+    print(f"   ✅ autism_dataset.csv: {len(df)} عينة, {len(df.columns)} عمود")
+except Exception as e:
+    print(f"   ❌ خطأ: {e}")
+
+# ============================================
+# عرض النتائج النهائية
+# ============================================
+print("\n" + "=" * 60)
+print("📁 الملفات التي تم تحميلها:")
+print("=" * 60)
+
+total_samples = 0
+for file in os.listdir('data'):
+    if file.endswith('.csv'):
+        df = pd.read_csv(f'data/{file}')
+        size = os.path.getsize(f'data/{file}')
+        total_samples += len(df)
+        print(f"   📄 {file}: {len(df):,} عينة, {size:,} bytes")
+        print(f"      الأعمدة: {', '.join(df.columns[:5])}...")
+
+print(f"\n📊 إجمالي العينات المجمعة: {total_samples:,} عينة")
+
+# ============================================
+# دمج جميع المصادر في ملف واحد كبير
+# ============================================
+print("\n" + "=" * 60)
+print("🔄 دمج جميع المصادر في ملف واحد...")
+print("=" * 60)
+
+all_data = []
+for file in os.listdir('data'):
+    if file.endswith('.csv'):
+        df = pd.read_csv(f'data/{file}')
+        all_data.append(df)
+
+if all_data:
+    merged_df = pd.concat(all_data, ignore_index=True)
+    merged_df.to_csv('data/all_autism_data_merged.csv', index=False)
+    print(f"✅ تم الدمج: {len(merged_df):,} عينة إجمالاً")
+    print(f"✅ تم حفظ الملف المدمج في: data/all_autism_data_merged.csv")
+
+print("\n🎉 اكتمل تحميل البيانات!")
