@@ -1,7 +1,12 @@
 streamlit
 pandas
 numpy
-scikit-learn
 matplotlib
 seaborn
 plotly
+scikit-learn
+xgboost
+tensorflow
+imbalanced-learn
+shap
+joblib
