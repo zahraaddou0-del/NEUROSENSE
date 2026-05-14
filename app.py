@@ -575,7 +575,7 @@ def main():
                     st.plotly_chart(fig_imp, use_container_width=True)
                 
                 # Matrice de confusion
-                st.markdown(f"#### 🔢 Matrice de confusion - {best_name}")
+                st.markdown(f"#### 🔢 Matrice de confusion - {best_name}") 
                 
                 if best_name == '🧠 Deep Neural Network':
                     best_pred = (best_model.predict(X_test).flatten() > 0.5).astype(int)
