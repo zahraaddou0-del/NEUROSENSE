@@ -1,12 +1,7 @@
-streamlit
-pandas
 numpy
+pandas
 matplotlib
 seaborn
-plotly
 scikit-learn
 xgboost
-tensorflow
 imbalanced-learn
-shap
-joblib
