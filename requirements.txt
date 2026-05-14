@@ -1,7 +1,5 @@
-numpy
+streamlit
 pandas
-matplotlib
-seaborn
+numpy
 scikit-learn
-xgboost
-imbalanced-learn
+plotly
