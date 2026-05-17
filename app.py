@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 NeuroSense - Prédiction de l'Autisme
-Interface élégante avec tous les questionnaires sur une seule page
+Avec interface moderne, questionnaire sur une page, et graphiques complets
 """
 
 import streamlit as st
@@ -13,11 +13,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, auc
-from PIL import Image
-import base64
 import time
 
-# ==================== CONFIGURATION DE LA PAGE ====================
+# ==================== CONFIGURATION ====================
 st.set_page_config(
     page_title="NeuroSense - Détection Autisme",
     page_icon="🧠",
@@ -25,22 +23,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==================== CSS PERSONNALISÉ (Design Moderne) ====================
+# ==================== CSS PERSONNALISÉ ====================
 st.markdown("""
 <style>
-    /* Police et fond */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     * {
         font-family: 'Inter', sans-serif;
     }
     
-    /* Fond principal */
     .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* Conteneur principal */
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 2rem;
@@ -57,12 +52,6 @@ st.markdown("""
         text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
     
-    .main-header p {
-        color: rgba(255,255,255,0.9);
-        font-size: 1.2rem;
-    }
-    
-    /* Cartes */
     .card {
         background: white;
         border-radius: 20px;
@@ -76,7 +65,18 @@ st.markdown("""
         transform: translateY(-5px);
     }
     
-    /* Boutons */
+    .role-card {
+        text-align: center;
+        padding: 2rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .role-card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -93,30 +93,7 @@ st.markdown("""
         box-shadow: 0 5px 20px rgba(102,126,234,0.4);
     }
     
-    /* Champs de formulaire */
-    .stTextInput > div > div > input, 
-    .stNumberInput > div > div > input,
-    .stSelectbox > div > div,
-    .stRadio > div {
-        border-radius: 15px !important;
-        border: 2px solid #e0e0e0 !important;
-        padding: 0.5rem !important;
-    }
-    
-    .stTextInput > div > div > input:focus,
-    .stNumberInput > div > div > input:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 2px rgba(102,126,234,0.2) !important;
-    }
-    
-    /* Barre de progression */
-    .stProgress > div > div > div > div {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    /* Résultats */
     .result-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         border-radius: 20px;
         padding: 2rem;
         text-align: center;
@@ -131,22 +108,15 @@ st.markdown("""
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
     }
     
-    /* Animations */
+    .fade-in {
+        animation: fadeIn 0.6s ease-out;
+    }
+    
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
     
-    .fade-in {
-        animation: fadeIn 0.6s ease-out;
-    }
-    
-    /* Sidebar */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-    }
-    
-    /* Badges */
     .badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
@@ -158,16 +128,6 @@ st.markdown("""
     
     .badge-ai {
         background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
-    }
-    
-    .badge-success {
-        background: #4CAF50;
-        color: white;
-    }
-    
-    .badge-warning {
-        background: #ff9800;
         color: white;
     }
 </style>
@@ -188,6 +148,8 @@ if 'infos_enfant' not in st.session_state:
     st.session_state.infos_enfant = {}
 if 'page' not in st.session_state:
     st.session_state.page = 1
+if 'role' not in st.session_state:
+    st.session_state.role = None
 
 # ==================== FONCTIONS ====================
 
@@ -247,7 +209,7 @@ def entrainer_modele(df):
     
     return model, le_dict, X_train, X_test, y_train, y_test, y_pred, accuracy
 
-# ==================== CHARGEMENT DES DONNÉES ====================
+# ==================== CHARGEMENT ====================
 if st.session_state.df is None:
     with st.spinner("🧠 Initialisation de NeuroSense..."):
         st.session_state.df, _ = charger_donnees()
@@ -278,40 +240,71 @@ with st.sidebar:
     
     if st.session_state.model_entraine:
         st.metric("🎯 Précision du modèle", f"{st.session_state.accuracy:.1%}")
-        
-        # Mini graphique dans le sidebar
-        cm = confusion_matrix(st.session_state.y_test, st.session_state.y_pred)
-        fig, ax = plt.subplots(figsize=(4, 3))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='coolwarm', ax=ax, cbar=False)
-        ax.set_title('Matrice de confusion', fontsize=10)
-        st.pyplot(fig)
     
     st.markdown("---")
-    st.markdown("""
-    <div style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">
-        <p>🔬 <strong>Technologie</strong><br>Random Forest Classifier</p>
-        <p>📊 <strong>Données</strong><br>1000+ cas analysés</p>
-        <p>⚡ <strong>Précision</strong><br>Haute fiabilité</p>
-    </div>
-    """, unsafe_allow_html=True)
+    
+    # Afficher l'étape actuelle
+    st.subheader("📌 Progression")
+    etapes = ["Choix du rôle", "Infos enfant", "Questionnaire", "Résultat"]
+    for i, etape in enumerate(etapes, 1):
+        if i < st.session_state.page:
+            st.markdown(f"✅ {i}. {etape}")
+        elif i == st.session_state.page:
+            st.markdown(f"🔵 **{i}. {etape}**")
+        else:
+            st.markdown(f"⚪ {i}. {etape}")
 
-# ==================== PAGE PRINCIPALE ====================
-
-# En-tête
+# ==================== EN-TÊTE ====================
 st.markdown("""
 <div class="main-header fade-in">
     <h1>🧠 NeuroSense</h1>
     <p>Prédiction des troubles du spectre autistique par intelligence artificielle</p>
     <div style="margin-top: 1rem;">
         <span class="badge badge-ai">🤖 IA avancée</span>
-        <span class="badge badge-success">✅ Haute précision</span>
-        <span class="badge badge-warning">⚡ Rapide</span>
+        <span class="badge" style="background: #4CAF50; color: white;">✅ Haute précision</span>
+        <span class="badge" style="background: #ff9800; color: white;">⚡ Rapide</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Page 1: Formulaire enfant
+# ==================== PAGE 1: CHOIX DU RÔLE ====================
 if st.session_state.page == 1:
+    st.markdown('<div class="card fade-in">', unsafe_allow_html=True)
+    st.subheader("👋 Qui êtes-vous ?")
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div class="role-card" style="text-align: center; background: linear-gradient(135deg, #667eea20, #764ba220); border-radius: 20px; padding: 2rem;">
+            <span style="font-size: 4rem;">👨‍👩‍👧</span>
+            <h3>Parent</h3>
+            <p>Complétez le questionnaire pour votre enfant</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("📝 Je suis un parent", key="btn_parent", use_container_width=True):
+            st.session_state.role = "parent"
+            st.session_state.page = 2
+            st.rerun()
+    
+    with col2:
+        st.markdown("""
+        <div class="role-card" style="text-align: center; background: linear-gradient(135deg, #667eea20, #764ba220); border-radius: 20px; padding: 2rem;">
+            <span style="font-size: 4rem;">👨‍⚕️</span>
+            <h3>Médecin</h3>
+            <p>Évaluez votre patient avec notre outil d'aide</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🩺 Je suis médecin", key="btn_medecin", use_container_width=True):
+            st.session_state.role = "medecin"
+            st.session_state.page = 2
+            st.rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ==================== PAGE 2: INFORMATIONS ENFANT ====================
+elif st.session_state.page == 2:
     st.markdown('<div class="card fade-in">', unsafe_allow_html=True)
     st.subheader("👶 Informations de l'enfant")
     st.markdown("---")
@@ -338,6 +331,10 @@ if st.session_state.page == 1:
     st.markdown("</div>", unsafe_allow_html=True)
     
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn1:
+        if st.button("⬅️ Retour", use_container_width=True):
+            st.session_state.page = 1
+            st.rerun()
     with col_btn2:
         if st.button("📝 Commencer le questionnaire", type="primary", use_container_width=True):
             if nom and nom.strip() != "":
@@ -349,13 +346,13 @@ if st.session_state.page == 1:
                     "jaundice": jaundice,
                     "family_asd": family_asd
                 }
-                st.session_state.page = 2
+                st.session_state.page = 3
                 st.rerun()
             else:
                 st.error("⚠️ Veuillez entrer le nom de l'enfant")
 
-# Page 2: Tous les questionnaires en une page
-elif st.session_state.page == 2:
+# ==================== PAGE 3: TOUTES LES QUESTIONS ====================
+elif st.session_state.page == 3:
     st.markdown(f"""
     <div class="card fade-in">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -370,7 +367,7 @@ elif st.session_state.page == 2:
     </div>
     """, unsafe_allow_html=True)
     
-    # Liste des questions avec icônes
+    # Liste des questions
     questions = [
         {"id": "A1", "icon": "😊", "question": "Difficultés à comprendre les expressions faciales ?", "detail": "Ne comprend pas quand quelqu'un est triste, content ou fâché"},
         {"id": "A2", "icon": "💬", "question": "Difficultés à maintenir une conversation ?", "detail": "Ne sait pas quand parler, quand s'arrêter, ou change de sujet brusquement"},
@@ -386,74 +383,61 @@ elif st.session_state.page == 2:
     
     # Afficher toutes les questions
     for idx, q in enumerate(questions, 1):
-        col1, col2 = st.columns([1, 4])
-        
-        with col1:
-            st.markdown(f"""
-            <div style="text-align: center; background: linear-gradient(135deg, #667eea, #764ba2); width: 50px; height: 50px; border-radius: 25px; display: flex; align-items: center; justify-content: center;">
-                <span style="font-size: 1.8rem;">{q['icon']}</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            with st.container():
+        with st.container():
+            col1, col2 = st.columns([1, 5])
+            with col1:
                 st.markdown(f"""
-                <div style="background: white; border-radius: 15px; padding: 1rem; margin-bottom: 0.5rem; border: 1px solid #e0e0e0;">
-                    <strong>Question {idx}/10</strong><br>
-                    {q['question']}
-                    <br><small style="color: #888;">💡 {q['detail']}</small>
+                <div style="background: linear-gradient(135deg, #667eea, #764ba2); width: 50px; height: 50px; border-radius: 25px; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 1.8rem;">{q['icon']}</span>
                 </div>
                 """, unsafe_allow_html=True)
-                
+            with col2:
+                st.markdown(f"**Question {idx}/10** - {q['question']}")
+                st.caption(f"💡 {q['detail']}")
                 reponse = st.radio(
                     "",
                     options=[0, 1],
-                    format_func=lambda x: "❌ Non, pas observé" if x == 0 else "✅ Oui, observé",
+                    format_func=lambda x: "❌ Non" if x == 0 else "✅ Oui",
                     key=f"q_{q['id']}",
                     index=st.session_state.reponses.get(q['id'], None),
                     horizontal=True,
                     label_visibility="collapsed"
                 )
-                
                 if reponse is not None:
                     st.session_state.reponses[q['id']] = reponse
-        
         st.markdown("---")
     
-    # Score total en temps réel
+    # Score en temps réel
     total_repondu = len(st.session_state.reponses)
     if total_repondu > 0:
-        total_score = sum([st.session_state.reponses.get(f'A{i}', 0) for i in range(1, total_repondu + 1) if f'A{i}' in st.session_state.reponses])
-        
-        col_score1, col_score2, col_score3 = st.columns([1, 2, 1])
-        with col_score2:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 20px; padding: 1rem; text-align: center; margin: 1rem 0;">
-                <span style="color: white; font-size: 1.2rem;">📊 Progression : {total_repondu}/10 questions répondues</span>
-                <br>
-                <span style="color: white; font-size: 2rem; font-weight: bold;">Score actuel : {total_score}/{total_repondu}</span>
-            </div>
-            """, unsafe_allow_html=True)
+        total_score = sum(st.session_state.reponses.values())
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 20px; padding: 1rem; text-align: center; margin: 1rem 0;">
+            <span style="color: white; font-size: 1.2rem;">📊 Progression : {total_repondu}/10 questions</span><br>
+            <span style="color: white; font-size: 2rem; font-weight: bold;">Score actuel : {total_score}/{total_repondu}</span>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Boutons
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-    
     with col_btn1:
         if st.button("⬅️ Retour", use_container_width=True):
-            st.session_state.page = 1
+            st.session_state.page = 2
             st.rerun()
-    
     with col_btn3:
         if len(st.session_state.reponses) == 10:
             if st.button("🔮 Voir le résultat", type="primary", use_container_width=True):
-                st.session_state.page = 3
+                st.session_state.page = 4
                 st.rerun()
         else:
             st.warning(f"⚠️ {10 - len(st.session_state.reponses)} question(s) restante(s)")
 
-# Page 3: Résultat
-elif st.session_state.page == 3:
-    # Préparation des données
+# ==================== PAGE 4: RÉSULTAT + GRAPHIQUES ====================
+elif st.session_state.page == 4:
+    # Calcul du score
+    total_score = sum(st.session_state.reponses.values())
+    
+    # Préparation des données pour la prédiction
     input_data = []
     for i in range(1, 11):
         input_data.append(st.session_state.reponses.get(f'A{i}', 0))
@@ -464,20 +448,18 @@ elif st.session_state.page == 3:
     input_data.append(st.session_state.infos_enfant.get('jaundice', 0))
     input_data.append(st.session_state.infos_enfant.get('family_asd', 0))
     
-    total_score = sum([st.session_state.reponses.get(f'A{i}', 0) for i in range(1, 11)])
-    
     if st.session_state.model_entraine:
         input_array = np.array(input_data).reshape(1, -1)
         prediction = st.session_state.model.predict(input_array)[0]
         probabilities = st.session_state.model.predict_proba(input_array)[0]
         
-        # Animation de chargement
-        with st.spinner("Analyse en cours..."):
+        # Animation
+        with st.spinner("🧠 Analyse en cours..."):
             time.sleep(0.5)
         
-        # Affichage du résultat
+        # ==================== RÉSULTAT PRINCIPAL ====================
         if prediction == 1:
-            st.markdown(f"""
+            st.markdown("""
             <div class="result-card result-high fade-in" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
                 <span style="font-size: 4rem;">🚨</span>
                 <h1 style="color: white;">Risque élevé</h1>
@@ -485,7 +467,7 @@ elif st.session_state.page == 3:
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.markdown(f"""
+            st.markdown("""
             <div class="result-card result-low fade-in" style="background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);">
                 <span style="font-size: 4rem;">✅</span>
                 <h1 style="color: #2c3e50;">Risque faible</h1>
@@ -493,68 +475,150 @@ elif st.session_state.page == 3:
             </div>
             """, unsafe_allow_html=True)
         
-        # Statistiques détaillées
+        # Statistiques principales
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             st.metric("📊 Score total", f"{total_score}/10")
-        
         with col2:
-            proba_autisme = probabilities[1] * 100
-            st.metric("🤖 Probabilité autiste", f"{proba_autisme:.1f}%")
-        
+            st.metric("🤖 Probabilité autiste", f"{probabilities[1]:.1%}")
         with col3:
             st.metric("🎯 Précision IA", f"{st.session_state.accuracy:.1%}")
         
-        # Barre de progression
-        st.markdown("### 📈 Niveau de probabilité")
         st.progress(probabilities[1])
-        
-        # Détail des réponses
-        with st.expander("📋 Détail des réponses", expanded=False):
-            for i in range(1, 11):
-                reponse = st.session_state.reponses.get(f'A{i}', 0)
-                emoji = "✅" if reponse == 1 else "❌"
-                st.write(f"{emoji} Question {i}: {'Oui, observé' if reponse == 1 else 'Non, pas observé'}")
-        
-        # Recommandations
         st.markdown("---")
+        
+        # ==================== GRAPHIQUES COMPLETS ====================
+        st.subheader("📊 Analyse détaillée du modèle d'IA")
+        
+        # Ligne 1: Matrice de confusion + Rapport de classification
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.markdown("#### 📊 Matrice de confusion")
+            cm = confusion_matrix(st.session_state.y_test, st.session_state.y_pred)
+            fig_cm, ax_cm = plt.subplots(figsize=(6, 5))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax_cm, 
+                        xticklabels=['Non-autiste', 'Autiste'],
+                        yticklabels=['Non-autiste', 'Autiste'])
+            ax_cm.set_xlabel('Prédiction')
+            ax_cm.set_ylabel('Réalité')
+            ax_cm.set_title('Matrice de confusion - Random Forest')
+            st.pyplot(fig_cm)
+        
+        with col_g2:
+            st.markdown("#### 📈 Rapport de classification")
+            report = classification_report(st.session_state.y_test, st.session_state.y_pred, output_dict=True)
+            report_df = pd.DataFrame(report).transpose().round(3)
+            st.dataframe(report_df, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Ligne 2: Courbe ROC
+        st.markdown("#### 📉 Courbe ROC (Receiver Operating Characteristic)")
+        y_pred_proba = st.session_state.model.predict_proba(st.session_state.X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(st.session_state.y_test, y_pred_proba)
+        roc_auc = auc(fpr, tpr)
+        
+        col_roc1, col_roc2 = st.columns([2, 1])
+        with col_roc1:
+            fig_roc, ax_roc = plt.subplots(figsize=(8, 6))
+            ax_roc.plot(fpr, tpr, color='darkorange', lw=3, label=f'Random Forest (AUC = {roc_auc:.3f})')
+            ax_roc.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Modèle aléatoire (AUC = 0.5)')
+            ax_roc.set_xlabel('Taux de faux positifs (1 - Spécificité)')
+            ax_roc.set_ylabel('Taux de vrais positifs (Sensibilité)')
+            ax_roc.set_title('Courbe ROC - Performance du modèle NeuroSense')
+            ax_roc.legend(loc="lower right")
+            ax_roc.grid(True, alpha=0.3)
+            st.pyplot(fig_roc)
+        with col_roc2:
+            st.metric("📊 AUC (Area Under Curve)", f"{roc_auc:.3f}")
+            st.caption("L'AUC mesure la capacité du modèle à distinguer les deux classes")
+            st.caption("🎯 AUC > 0.8 = Très bonne performance")
+        
+        st.markdown("---")
+        
+        # Ligne 3: Importance des caractéristiques
+        st.markdown("#### 🎯 Importance des caractéristiques")
+        feature_names = st.session_state.X_train.columns.tolist()
+        importances = st.session_state.model.feature_importances_
+        
+        # Trier par importance
+        indices = np.argsort(importances)[::-1][:10]
+        
+        fig_imp, ax_imp = plt.subplots(figsize=(10, 6))
+        ax_imp.barh(range(len(indices)), importances[indices], color='#667eea')
+        ax_imp.set_yticks(range(len(indices)))
+        ax_imp.set_yticklabels([feature_names[i] for i in indices])
+        ax_imp.set_xlabel('Importance')
+        ax_imp.set_title('Top 10 des caractéristiques les plus importantes pour la prédiction')
+        ax_imp.invert_yaxis()
+        st.pyplot(fig_imp)
+        
+        st.caption("💡 Ces caractéristiques sont les plus influentes dans la décision du modèle")
+        
+        st.markdown("---")
+        
+        # ==================== RECOMMANDATIONS ====================
         st.subheader("💡 Recommandations personnalisées")
         
-        if prediction == 1:
-            st.markdown("""
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
-                <strong>📞 Consultez rapidement un professionnel de santé</strong><br>
-                • Pédiatre ou neuropédiatre<br>
-                • Centre de référence pour l'autisme<br>
-                • Orthophoniste ou psychologue spécialisé
-            </div>
-            """, unsafe_allow_html=True)
+        if st.session_state.role == "parent":
+            if prediction == 1:
+                st.markdown("""
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
+                    <strong>📞 Pour les parents :</strong><br>
+                    • Consultez rapidement votre pédiatre ou un neuropédiatre<br>
+                    • Contactez un centre de référence pour l'autisme<br>
+                    • Notez les comportements observés pour le prochain rendez-vous<br>
+                    • Renseignez-vous auprès d'associations spécialisées
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
+                    <strong>✅ Pour les parents :</strong><br>
+                    • Continuez à surveiller le développement de votre enfant<br>
+                    • Consultez régulièrement votre pédiatre pour les visites de routine<br>
+                    • Stimulez les interactions sociales et la communication<br>
+                    • En cas de doute, n'hésitez pas à refaire l'évaluation
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
-                <strong>✅ Surveillez le développement de votre enfant</strong><br>
-                • Consultez régulièrement votre pédiatre<br>
-                • Observez les étapes clés du développement<br>
-                • En cas de doute, n'hésitez pas à consulter
-            </div>
-            """, unsafe_allow_html=True)
+            if prediction == 1:
+                st.markdown("""
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
+                    <strong>🩺 Pour les médecins :</strong><br>
+                    • Réalisez une évaluation clinique approfondie<br>
+                    • Utilisez des outils diagnostiques standardisés (ADOS, CARS, M-CHAT)<br>
+                    • Orientez vers un centre spécialisé si nécessaire<br>
+                    • Prescrivez des examens complémentaires si indiqués
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
+                    <strong>🩺 Pour les médecins :</strong><br>
+                    • Rassurez les parents sur le développement de l'enfant<br>
+                    • Continuez le suivi régulier du développement<br>
+                    • Restez attentif aux signes d'alerte lors des prochaines visites
+                </div>
+                """, unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # Bouton pour recommencer
+        # ==================== BOUTON RECOMMENCER ====================
         col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
         with col_btn2:
             if st.button("🔄 Nouvelle évaluation", type="primary", use_container_width=True):
                 st.session_state.page = 1
                 st.session_state.reponses = {}
                 st.session_state.infos_enfant = {}
+                st.session_state.role = None
                 st.rerun()
     
     else:
         st.error("❌ Modèle non disponible. Veuillez rafraîchir la page.")
 
-# Pied de page
+# ==================== PIED DE PAGE ====================
 st.markdown("""
 <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.7);">
     <hr style="border-color: rgba(255,255,255,0.2);">
