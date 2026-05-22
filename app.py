@@ -673,4 +673,111 @@ elif st.session_state.page == 4:
                 col_roc1, col_roc2 = st.columns([2, 1])
                 with col_roc1:
                     fig_roc, ax_roc = plt.subplots(figsize=(8, 6))
-                    ax_roc.plot(fpr, tpr, color
+                    ax_roc.plot(fpr, tpr, color='darkorange', lw=3, label=f'Meilleur modèle (AUC = {roc_auc:.3f})')
+                    ax_roc.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Modèle aléatoire (AUC = 0.5)')
+                    ax_roc.set_xlabel('Taux de faux positifs (1 - Spécificité)')
+                    ax_roc.set_ylabel('Taux de vrais positifs (Sensibilité)')
+                    ax_roc.set_title('Courbe ROC - Performance du modèle NeuroSense')
+                    ax_roc.legend(loc="lower right")
+                    ax_roc.grid(True, alpha=0.3)
+                    st.pyplot(fig_roc)
+                with col_roc2:
+                    st.metric("📊 AUC (Area Under Curve)", f"{roc_auc:.3f}")
+                    st.caption("L'AUC mesure la capacité du modèle à distinguer les deux classes")
+                    st.caption("🎯 AUC > 0.8 = Très bonne performance")
+            else:
+                st.info("ℹ️ La courbe ROC n'est pas disponible pour ce type de modèle")
+        
+        st.markdown("---")
+        
+        # Ligne 3: Importance des caractéristiques (pour Random Forest)
+        if hasattr(st.session_state.model, 'feature_importances_') and hasattr(st.session_state, 'X_train'):
+            st.markdown("#### 🎯 Importance des caractéristiques")
+            feature_names = st.session_state.X_train.columns.tolist() if hasattr(st.session_state.X_train, 'columns') else [f"F{i}" for i in range(15)]
+            importances = st.session_state.model.feature_importances_
+            
+            # Trier par importance
+            indices = np.argsort(importances)[::-1][:10]
+            
+            fig_imp, ax_imp = plt.subplots(figsize=(10, 6))
+            ax_imp.barh(range(len(indices)), importances[indices], color='#667eea')
+            ax_imp.set_yticks(range(len(indices)))
+            ax_imp.set_yticklabels([feature_names[i] for i in indices])
+            ax_imp.set_xlabel('Importance')
+            ax_imp.set_title('Top 10 des caractéristiques les plus importantes pour la prédiction')
+            ax_imp.invert_yaxis()
+            st.pyplot(fig_imp)
+            
+            st.caption("💡 Ces caractéristiques sont les plus influentes dans la décision du modèle")
+        
+        st.markdown("---")
+        
+        # ==================== RECOMMANDATIONS ====================
+        st.subheader("💡 Recommandations personnalisées")
+        
+        if st.session_state.role == "parent":
+            if prediction == 1:
+                st.markdown("""
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
+                    <strong>📞 Pour les parents :</strong><br>
+                    • Consultez rapidement votre pédiatre ou un neuropédiatre<br>
+                    • Contactez un centre de référence pour l'autisme<br>
+                    • Notez les comportements observés pour le prochain rendez-vous<br>
+                    • Renseignez-vous auprès d'associations spécialisées
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
+                    <strong>✅ Pour les parents :</strong><br>
+                    • Continuez à surveiller le développement de votre enfant<br>
+                    • Consultez régulièrement votre pédiatre pour les visites de routine<br>
+                    • Stimulez les interactions sociales et la communication<br>
+                    • En cas de doute, n'hésitez pas à refaire l'évaluation
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            if prediction == 1:
+                st.markdown("""
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
+                    <strong>🩺 Pour les médecins :</strong><br>
+                    • Réalisez une évaluation clinique approfondie<br>
+                    • Utilisez des outils diagnostiques standardisés (ADOS, CARS, M-CHAT)<br>
+                    • Orientez vers un centre spécialisé si nécessaire<br>
+                    • Prescrivez des examens complémentaires si indiqués
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
+                    <strong>🩺 Pour les médecins :</strong><br>
+                    • Rassurez les parents sur le développement de l'enfant<br>
+                    • Continuez le suivi régulier du développement<br>
+                    • Restez attentif aux signes d'alerte lors des prochaines visites
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # ==================== BOUTON RECOMMENCER ====================
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+        with col_btn2:
+            if st.button("🔄 Nouvelle évaluation", type="primary", use_container_width=True):
+                st.session_state.page = 1
+                st.session_state.reponses = {}
+                st.session_state.infos_enfant = {}
+                st.session_state.role = None
+                st.rerun()
+    
+    else:
+        st.error("❌ Modèle non disponible. Veuillez rafraîchir la page.")
+
+# ==================== PIED DE PAGE ====================
+st.markdown("""
+<div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.7);">
+    <hr style="border-color: rgba(255,255,255,0.2);">
+    <p>🧠 NeuroSense - Intelligence artificielle pour la détection précoce des TSA</p>
+    <p style="font-size: 0.8rem;">🤖 9 modèles entraînés : 7 individuels + 2 ensembles (Voting & Stacking)</p>
+    <p style="font-size: 0.8rem;">© 2024 - Outil d'aide à la décision - Consultez toujours un professionnel de santé</p>
+</div>
+""", unsafe_allow_html=True)
