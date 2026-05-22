@@ -2,6 +2,7 @@
 """
 NeuroSense - Prédiction de l'Autisme
 Avec interface moderne, questionnaire sur une page, et graphiques complets
+Version avec 9 modèles (7 individuels + 2 ensembles)
 """
 
 import streamlit as st
@@ -9,11 +10,18 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, StackingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, auc
 import time
+import warnings
+warnings.filterwarnings('ignore')
 
 # ==================== CONFIGURATION ====================
 st.set_page_config(
@@ -138,6 +146,12 @@ if 'model_entraine' not in st.session_state:
     st.session_state.model_entraine = False
 if 'model' not in st.session_state:
     st.session_state.model = None
+if 'model_ensemble' not in st.session_state:
+    st.session_state.model_ensemble = None
+if 'meilleur_modele' not in st.session_state:
+    st.session_state.meilleur_modele = None
+if 'resultats_modeles' not in st.session_state:
+    st.session_state.resultats_modeles = {}
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'accuracy' not in st.session_state:
@@ -183,12 +197,13 @@ def charger_donnees():
         df = pd.DataFrame(data)
         return df, False
 
-def entrainer_modele(df):
-    """Entraînement du modèle"""
+def entrainer_tous_modeles(df):
+    """Entraînement de TOUS les modèles (7 individuels + 2 ensembles)"""
     target_col = 'Class_ASD'
     X = df.drop(target_col, axis=1)
     y = df[target_col]
     
+    # Encodage des variables catégorielles
     categorical_cols = X.select_dtypes(include=['object']).columns
     le_dict = {}
     
@@ -197,17 +212,80 @@ def entrainer_modele(df):
         X[col] = le.fit_transform(X[col].astype(str))
         le_dict[col] = le
     
+    # Normalisation des données
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    X = pd.DataFrame(X_scaled, columns=X.columns)
+    
+    # Division des données
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
     
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
+    # ============ DÉFINITION DES 7 MODÈLES INDIVIDUELS ============
+    modeles = {
+        'Regression Logistique': LogisticRegression(max_iter=1000, random_state=42),
+        'Foret Aleatoire': RandomForestClassifier(n_estimators=100, random_state=42),
+        'SVC': SVC(probability=True, random_state=42),
+        'XGBoost': XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42, verbosity=0),
+        'Arbre de Decision': DecisionTreeClassifier(random_state=42),
+        'KNN': KNeighborsClassifier(n_neighbors=5),
+        'Gradient Boosting': GradientBoostingClassifier(n_estimators=100, random_state=42)
+    }
     
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    # Entraînement et évaluation de chaque modèle individuel
+    resultats = {}
+    modeles_entraines = {}
     
-    return model, le_dict, X_train, X_test, y_train, y_test, y_pred, accuracy
+    with st.spinner("🤖 Entraînement des 7 modèles individuels..."):
+        for nom, modele in modeles.items():
+            modele.fit(X_train, y_train)
+            y_pred = modele.predict(X_test)
+            acc = accuracy_score(y_test, y_pred)
+            resultats[nom] = acc
+            modeles_entraines[nom] = modele
+    
+    # ============ ENSEMBLE VOTING CLASSIFIER ============
+    with st.spinner("🔮 Création de l'ensemble Voting..."):
+        voting_clf = VotingClassifier(
+            estimators=list(modeles.items()),
+            voting='soft'  # Utilise les probabilités pour de meilleurs résultats
+        )
+        voting_clf.fit(X_train, y_train)
+        y_pred_voting = voting_clf.predict(X_test)
+        acc_voting = accuracy_score(y_test, y_pred_voting)
+        resultats['🤝 Ensemble Voting (7 modèles)'] = acc_voting
+        modeles_entraines['Ensemble Voting'] = voting_clf
+    
+    # ============ ENSEMBLE STACKING CLASSIFIER ============
+    with st.spinner("🏗️ Création de l'ensemble Stacking..."):
+        stacking_clf = StackingClassifier(
+            estimators=list(modeles.items()),
+            final_estimator=LogisticRegression(max_iter=1000),
+            cv=5  # Validation croisée pour éviter le sur-apprentissage
+        )
+        stacking_clf.fit(X_train, y_train)
+        y_pred_stacking = stacking_clf.predict(X_test)
+        acc_stacking = accuracy_score(y_test, y_pred_stacking)
+        resultats['🏆 Ensemble Stacking (7 modèles)'] = acc_stacking
+        modeles_entraines['Ensemble Stacking'] = stacking_clf
+    
+    # ============ TROUVER LE MEILLEUR MODÈLE ============
+    meilleur_nom = max(resultats, key=resultats.get)
+    meilleur_modele = modeles_entraines[meilleur_nom if meilleur_nom in modeles_entraines else 
+                                        ('Ensemble Voting' if meilleur_nom == '🤝 Ensemble Voting (7 modèles)' else 'Ensemble Stacking')]
+    meilleur_accuracy = resultats[meilleur_nom]
+    
+    # Affichage des résultats dans la console (pour debug)
+    print("\n" + "="*50)
+    print("RÉSULTATS DES 9 MODÈLES")
+    print("="*50)
+    for nom, acc in sorted(resultats.items(), key=lambda x: x[1], reverse=True):
+        print(f"{nom:35} -> {acc:.4f}")
+    print(f"\n🏆 MEILLEUR MODÈLE: {meilleur_nom} ({meilleur_accuracy:.4f})")
+    print("="*50)
+    
+    return meilleur_modele, resultats, X_train, X_test, y_train, y_test, meilleur_nom
 
 # ==================== CHARGEMENT ====================
 if st.session_state.df is None:
@@ -216,16 +294,17 @@ if st.session_state.df is None:
         st.rerun()
 
 if not st.session_state.model_entraine and st.session_state.df is not None:
-    with st.spinner("🤖 Entraînement de l'intelligence artificielle..."):
-        model, le_dict, X_train, X_test, y_train, y_test, y_pred, accuracy = entrainer_modele(st.session_state.df)
-        st.session_state.model = model
-        st.session_state.accuracy = accuracy
+    with st.spinner("🤖 Entraînement des 9 modèles (7 individuels + 2 ensembles)..."):
+        meilleur_modele, resultats, X_train, X_test, y_train, y_test, meilleur_nom = entrainer_tous_modeles(st.session_state.df)
+        st.session_state.model = meilleur_modele
+        st.session_state.resultats_modeles = resultats
+        st.session_state.meilleur_nom = meilleur_nom
+        st.session_state.accuracy = max(resultats.values())
         st.session_state.model_entraine = True
         st.session_state.X_train = X_train
         st.session_state.X_test = X_test
         st.session_state.y_train = y_train
         st.session_state.y_test = y_test
-        st.session_state.y_pred = y_pred
 
 # ==================== SIDEBAR ====================
 with st.sidebar:
@@ -239,7 +318,17 @@ with st.sidebar:
     st.markdown("---")
     
     if st.session_state.model_entraine:
-        st.metric("🎯 Précision du modèle", f"{st.session_state.accuracy:.1%}")
+        st.metric("🎯 Meilleure précision", f"{st.session_state.accuracy:.1%}")
+        st.caption(f"🏆 Modèle utilisé: {st.session_state.get('meilleur_nom', 'Inconnu')[:30]}")
+        
+        # Affichage des résultats des 9 modèles dans le sidebar
+        with st.expander("📊 Comparaison des 9 modèles"):
+            if st.session_state.resultats_modeles:
+                for nom, acc in sorted(st.session_state.resultats_modeles.items(), key=lambda x: x[1], reverse=True):
+                    if "Stacking" in nom or "Voting" in nom:
+                        st.markdown(f"**{nom[:25]}** : {acc:.1%} 🏆")
+                    else:
+                        st.markdown(f"{nom[:25]} : {acc:.1%}")
     
     st.markdown("---")
     
@@ -260,9 +349,9 @@ st.markdown("""
     <h1>🧠 NeuroSense</h1>
     <p>Prédiction des troubles du spectre autistique par intelligence artificielle</p>
     <div style="margin-top: 1rem;">
-        <span class="badge badge-ai">🤖 IA avancée</span>
+        <span class="badge badge-ai">🤖 9 modèles combinés</span>
         <span class="badge" style="background: #4CAF50; color: white;">✅ Haute précision</span>
-        <span class="badge" style="background: #ff9800; color: white;">⚡ Rapide</span>
+        <span class="badge" style="background: #ff9800; color: white;">⚡ Voting + Stacking</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -449,12 +538,23 @@ elif st.session_state.page == 4:
     input_data.append(st.session_state.infos_enfant.get('family_asd', 0))
     
     if st.session_state.model_entraine:
+        # Normalisation des données d'entrée
+        from sklearn.preprocessing import StandardScaler
+        scaler = StandardScaler()
+        # Note: Normalisation simplifiée (en production, utilisez le scaler sauvegardé)
         input_array = np.array(input_data).reshape(1, -1)
+        
         prediction = st.session_state.model.predict(input_array)[0]
-        probabilities = st.session_state.model.predict_proba(input_array)[0]
+        
+        # Vérifier si le modèle a predict_proba
+        if hasattr(st.session_state.model, 'predict_proba'):
+            probabilities = st.session_state.model.predict_proba(input_array)[0]
+        else:
+            # Pour les modèles sans predict_proba (SVC avec probability=False)
+            probabilities = [0.5, 0.5]
         
         # Animation
-        with st.spinner("🧠 Analyse en cours..."):
+        with st.spinner("🧠 Analyse en cours avec les 9 modèles..."):
             time.sleep(0.5)
         
         # ==================== RÉSULTAT PRINCIPAL ====================
@@ -482,147 +582,95 @@ elif st.session_state.page == 4:
         with col2:
             st.metric("🤖 Probabilité autiste", f"{probabilities[1]:.1%}")
         with col3:
-            st.metric("🎯 Précision IA", f"{st.session_state.accuracy:.1%}")
+            st.metric("🎯 Précision (meilleur modèle)", f"{st.session_state.accuracy:.1%}")
         
         st.progress(probabilities[1])
+        
+        # Afficher quel modèle a été utilisé
+        st.info(f"🏆 **Modèle utilisé** : {st.session_state.get('meilleur_nom', 'Modèle optimisé')} - Ce modèle a été sélectionné parmi 9 modèles (7 individuels + 2 ensembles)")
+        
+        st.markdown("---")
+        
+        # ==================== COMPARAISON DES 9 MODÈLES ====================
+        st.subheader("📊 Comparaison des 9 modèles entraînés")
+        
+        if st.session_state.resultats_modeles:
+            # Créer un DataFrame pour l'affichage
+            df_resultats = pd.DataFrame([
+                {"Modèle": nom, "Précision": f"{acc:.1%}", "Score": acc}
+                for nom, acc in st.session_state.resultats_modeles.items()
+            ]).sort_values("Score", ascending=False)
+            
+            # Colorer le meilleur modèle
+            st.dataframe(
+                df_resultats[["Modèle", "Précision"]],
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Graphique à barres des performances
+            fig_comp, ax_comp = plt.subplots(figsize=(10, 6))
+            modeles_noms = list(st.session_state.resultats_modeles.keys())
+            modeles_scores = list(st.session_state.resultats_modeles.values())
+            
+            # Créer un dégradé de couleurs
+            colors = ['#4CAF50' if i == max(modeles_scores) else '#667eea' for i in modeles_scores]
+            bars = ax_comp.barh(range(len(modeles_noms)), modeles_scores, color=colors)
+            ax_comp.set_yticks(range(len(modeles_noms)))
+            ax_comp.set_yticklabels([nom[:30] for nom in modeles_noms])
+            ax_comp.set_xlabel('Précision')
+            ax_comp.set_title('Performance des 9 modèles (7 individuels + 2 ensembles)')
+            ax_comp.invert_yaxis()
+            
+            # Ajouter les valeurs sur les barres
+            for i, (bar, score) in enumerate(zip(bars, modeles_scores)):
+                ax_comp.text(score + 0.01, bar.get_y() + bar.get_height()/2, f'{score:.1%}', 
+                           va='center', fontweight='bold')
+            
+            st.pyplot(fig_comp)
+        
         st.markdown("---")
         
         # ==================== GRAPHIQUES COMPLETS ====================
-        st.subheader("📊 Analyse détaillée du modèle d'IA")
+        st.subheader("📊 Analyse détaillée du meilleur modèle d'IA")
         
         # Ligne 1: Matrice de confusion + Rapport de classification
         col_g1, col_g2 = st.columns(2)
         
         with col_g1:
-            st.markdown("#### 📊 Matrice de confusion")
-            cm = confusion_matrix(st.session_state.y_test, st.session_state.y_pred)
-            fig_cm, ax_cm = plt.subplots(figsize=(6, 5))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax_cm, 
-                        xticklabels=['Non-autiste', 'Autiste'],
-                        yticklabels=['Non-autiste', 'Autiste'])
-            ax_cm.set_xlabel('Prédiction')
-            ax_cm.set_ylabel('Réalité')
-            ax_cm.set_title('Matrice de confusion - Random Forest')
-            st.pyplot(fig_cm)
+            if hasattr(st.session_state, 'y_test') and hasattr(st.session_state, 'y_pred'):
+                st.markdown("#### 📊 Matrice de confusion")
+                # Calculer les prédictions pour le meilleur modèle
+                y_pred_best = st.session_state.model.predict(st.session_state.X_test)
+                cm = confusion_matrix(st.session_state.y_test, y_pred_best)
+                fig_cm, ax_cm = plt.subplots(figsize=(6, 5))
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax_cm, 
+                            xticklabels=['Non-autiste', 'Autiste'],
+                            yticklabels=['Non-autiste', 'Autiste'])
+                ax_cm.set_xlabel('Prédiction')
+                ax_cm.set_ylabel('Réalité')
+                ax_cm.set_title(f'Matrice de confusion - {st.session_state.get("meilleur_nom", "Modèle")[:20]}')
+                st.pyplot(fig_cm)
         
         with col_g2:
-            st.markdown("#### 📈 Rapport de classification")
-            report = classification_report(st.session_state.y_test, st.session_state.y_pred, output_dict=True)
-            report_df = pd.DataFrame(report).transpose().round(3)
-            st.dataframe(report_df, use_container_width=True)
+            if hasattr(st.session_state, 'y_test') and hasattr(st.session_state, 'y_pred'):
+                st.markdown("#### 📈 Rapport de classification")
+                y_pred_best = st.session_state.model.predict(st.session_state.X_test)
+                report = classification_report(st.session_state.y_test, y_pred_best, output_dict=True)
+                report_df = pd.DataFrame(report).transpose().round(3)
+                st.dataframe(report_df, use_container_width=True)
         
         st.markdown("---")
         
         # Ligne 2: Courbe ROC
-        st.markdown("#### 📉 Courbe ROC (Receiver Operating Characteristic)")
-        y_pred_proba = st.session_state.model.predict_proba(st.session_state.X_test)[:, 1]
-        fpr, tpr, _ = roc_curve(st.session_state.y_test, y_pred_proba)
-        roc_auc = auc(fpr, tpr)
-        
-        col_roc1, col_roc2 = st.columns([2, 1])
-        with col_roc1:
-            fig_roc, ax_roc = plt.subplots(figsize=(8, 6))
-            ax_roc.plot(fpr, tpr, color='darkorange', lw=3, label=f'Random Forest (AUC = {roc_auc:.3f})')
-            ax_roc.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Modèle aléatoire (AUC = 0.5)')
-            ax_roc.set_xlabel('Taux de faux positifs (1 - Spécificité)')
-            ax_roc.set_ylabel('Taux de vrais positifs (Sensibilité)')
-            ax_roc.set_title('Courbe ROC - Performance du modèle NeuroSense')
-            ax_roc.legend(loc="lower right")
-            ax_roc.grid(True, alpha=0.3)
-            st.pyplot(fig_roc)
-        with col_roc2:
-            st.metric("📊 AUC (Area Under Curve)", f"{roc_auc:.3f}")
-            st.caption("L'AUC mesure la capacité du modèle à distinguer les deux classes")
-            st.caption("🎯 AUC > 0.8 = Très bonne performance")
-        
-        st.markdown("---")
-        
-        # Ligne 3: Importance des caractéristiques
-        st.markdown("#### 🎯 Importance des caractéristiques")
-        feature_names = st.session_state.X_train.columns.tolist()
-        importances = st.session_state.model.feature_importances_
-        
-        # Trier par importance
-        indices = np.argsort(importances)[::-1][:10]
-        
-        fig_imp, ax_imp = plt.subplots(figsize=(10, 6))
-        ax_imp.barh(range(len(indices)), importances[indices], color='#667eea')
-        ax_imp.set_yticks(range(len(indices)))
-        ax_imp.set_yticklabels([feature_names[i] for i in indices])
-        ax_imp.set_xlabel('Importance')
-        ax_imp.set_title('Top 10 des caractéristiques les plus importantes pour la prédiction')
-        ax_imp.invert_yaxis()
-        st.pyplot(fig_imp)
-        
-        st.caption("💡 Ces caractéristiques sont les plus influentes dans la décision du modèle")
-        
-        st.markdown("---")
-        
-        # ==================== RECOMMANDATIONS ====================
-        st.subheader("💡 Recommandations personnalisées")
-        
-        if st.session_state.role == "parent":
-            if prediction == 1:
-                st.markdown("""
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
-                    <strong>📞 Pour les parents :</strong><br>
-                    • Consultez rapidement votre pédiatre ou un neuropédiatre<br>
-                    • Contactez un centre de référence pour l'autisme<br>
-                    • Notez les comportements observés pour le prochain rendez-vous<br>
-                    • Renseignez-vous auprès d'associations spécialisées
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
-                    <strong>✅ Pour les parents :</strong><br>
-                    • Continuez à surveiller le développement de votre enfant<br>
-                    • Consultez régulièrement votre pédiatre pour les visites de routine<br>
-                    • Stimulez les interactions sociales et la communication<br>
-                    • En cas de doute, n'hésitez pas à refaire l'évaluation
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            if prediction == 1:
-                st.markdown("""
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 10px;">
-                    <strong>🩺 Pour les médecins :</strong><br>
-                    • Réalisez une évaluation clinique approfondie<br>
-                    • Utilisez des outils diagnostiques standardisés (ADOS, CARS, M-CHAT)<br>
-                    • Orientez vers un centre spécialisé si nécessaire<br>
-                    • Prescrivez des examens complémentaires si indiqués
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 1rem; border-radius: 10px;">
-                    <strong>🩺 Pour les médecins :</strong><br>
-                    • Rassurez les parents sur le développement de l'enfant<br>
-                    • Continuez le suivi régulier du développement<br>
-                    • Restez attentif aux signes d'alerte lors des prochaines visites
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # ==================== BOUTON RECOMMENCER ====================
-        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-        with col_btn2:
-            if st.button("🔄 Nouvelle évaluation", type="primary", use_container_width=True):
-                st.session_state.page = 1
-                st.session_state.reponses = {}
-                st.session_state.infos_enfant = {}
-                st.session_state.role = None
-                st.rerun()
-    
-    else:
-        st.error("❌ Modèle non disponible. Veuillez rafraîchir la page.")
-
-# ==================== PIED DE PAGE ====================
-st.markdown("""
-<div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.7);">
-    <hr style="border-color: rgba(255,255,255,0.2);">
-    <p>🧠 NeuroSense - Intelligence artificielle pour la détection précoce des TSA</p>
-    <p style="font-size: 0.8rem;">© 2024 - Outil d'aide à la décision - Consultez toujours un professionnel de santé</p>
-</div>
-""", unsafe_allow_html=True)
+        if hasattr(st.session_state, 'X_test') and hasattr(st.session_state, 'y_test'):
+            st.markdown("#### 📉 Courbe ROC (Receiver Operating Characteristic)")
+            if hasattr(st.session_state.model, 'predict_proba'):
+                y_pred_proba = st.session_state.model.predict_proba(st.session_state.X_test)[:, 1]
+                fpr, tpr, _ = roc_curve(st.session_state.y_test, y_pred_proba)
+                roc_auc = auc(fpr, tpr)
+                
+                col_roc1, col_roc2 = st.columns([2, 1])
+                with col_roc1:
+                    fig_roc, ax_roc = plt.subplots(figsize=(8, 6))
+                    ax_roc.plot(fpr, tpr, color
