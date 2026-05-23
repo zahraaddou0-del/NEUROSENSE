@@ -184,12 +184,16 @@ def ingenierie_features(df: pd.DataFrame) -> pd.DataFrame:
             df[c] = df[c].map({"Yes":1,"yes":1,"1":1,"No":0,"no":0,"0":0}).fillna(0).astype(int)
     df["sum_score"] = df[q_cols].sum(axis=1)
 
-    # age_group
+    # age_group — converti en int directement pour éviter Categorical dtype
     if "age" in df.columns:
         df["age"] = pd.to_numeric(df["age"], errors="coerce").fillna(5)
-        df["age_group"] = pd.cut(df["age"],
-                                  bins  =[0, 4, 12, 18, 40, 200],
-                                  labels=["Toddler","Kid","Teenager","Young","Senior"])
+        def age_to_group(a):
+            if a <= 4:   return 0  # Toddler
+            elif a <= 12: return 1  # Kid
+            elif a <= 18: return 2  # Teenager
+            elif a <= 40: return 3  # Young
+            else:         return 4  # Senior
+        df["age_group"] = df["age"].apply(age_to_group).astype(int)
     return df
 
 
@@ -197,6 +201,12 @@ def pretraiter(df: pd.DataFrame, is_train=True, le_dict=None, scaler=None):
     """Encodage + normalisation."""
     df = df.copy()
     target = "Class_ASD"
+
+    # Convertir toute colonne Categorical résiduelle en string
+    for c in df.columns:
+        if hasattr(df[c], "cat"):
+            df[c] = df[c].astype(str)
+
     cat_cols = [c for c in df.select_dtypes("object").columns if c != target]
 
     if is_train:
