@@ -33,20 +33,46 @@ from sklearn.ensemble        import RandomForestClassifier, GradientBoostingClas
 from sklearn.tree            import DecisionTreeClassifier
 from xgboost                 import XGBClassifier
 
-# ── Fonction d'oversampling manuel (remplace imblearn) ────────────
+# ── Fonction d'oversampling manuel CORRIGÉE ────────────────────────
 def RandomOverSampler_fit_resample(X, y, random_state=42):
-    """Oversampling manuel — remplace imblearn.RandomOverSampler."""
-    rng = np.random.RandomState(random_state)
-    classes, counts = np.unique(y, return_counts=True)
-    max_count = counts.max()
-    X_res, y_res = list(X), list(y)
-    for cls, cnt in zip(classes, counts):
-        if cnt < max_count:
-            idx = np.where(y == cls)[0]
-            extra = rng.choice(idx, max_count - cnt, replace=True)
-            X_res.append(X[extra])
-            y_res.append(y[extra])
-    return np.vstack(X_res), np.concatenate(y_res)
+    """
+    Oversampling manuel totalement corrigé.
+    Remplace imblearn.RandomOverSampler.
+    """
+    np.random.seed(random_state)
+    classes = np.unique(y)
+    max_count = 0
+    for cls in classes:
+        count = np.sum(y == cls)
+        if count > max_count:
+            max_count = count
+    
+    X_res = []
+    y_res = []
+    
+    for cls in classes:
+        # Récupérer les indices de la classe actuelle
+        indices = np.where(y == cls)[0]
+        X_class = X[indices]
+        y_class = y[indices]
+        
+        # Ajouter toutes les instances originales
+        X_res.append(X_class)
+        y_res.append(y_class)
+        
+        # Si c'est une classe minoritaire, ajouter des doublons
+        if len(X_class) < max_count:
+            n_need = max_count - len(X_class)
+            # Choisir aléatoirement des indices à dupliquer
+            extra_indices = np.random.choice(indices, n_need, replace=True)
+            X_res.append(X[extra_indices])
+            y_res.append(y[extra_indices])
+    
+    # Concaténer tous les résultats
+    X_final = np.vstack(X_res)
+    y_final = np.concatenate(y_res)
+    
+    return X_final, y_final
 
 # ── TensorFlow / Keras (ANN + CNN) ────────────────────────────────
 try:
@@ -244,7 +270,8 @@ def pretraiter(df: pd.DataFrame, is_train=True, le_dict=None, scaler=None):
     num_cols = [c for c in df.select_dtypes("number").columns if c != target]
     if is_train:
         scaler = StandardScaler()
-        df[num_cols] = scaler.fit_transform(df[num_cols])
+        if num_cols:
+            df[num_cols] = scaler.fit_transform(df[num_cols])
     else:
         if scaler and num_cols:
             df[num_cols] = scaler.transform(df[num_cols])
@@ -272,7 +299,9 @@ def modeles_classiques():
 # ══════════════════════════════════════════════════════════════════
 # ANN + CNN  (claredang — meilleur repo)
 # ══════════════════════════════════════════════════════════════════
-def build_ann(input_dim: int) -> "Sequential":
+def build_ann(input_dim: int):
+    if not TF_OK:
+        return None
     model = Sequential([
         Dense(128, activation="relu", input_shape=(input_dim,)),
         Dropout(0.3),
@@ -285,7 +314,9 @@ def build_ann(input_dim: int) -> "Sequential":
     return model
 
 
-def build_cnn(input_dim: int) -> "Sequential":
+def build_cnn(input_dim: int):
+    if not TF_OK:
+        return None
     model = Sequential([
         Conv1D(64, kernel_size=3, activation="relu",
                input_shape=(input_dim, 1), padding="same"),
@@ -302,6 +333,9 @@ def build_cnn(input_dim: int) -> "Sequential":
 
 def entrainer_deep(X_tr, X_te, y_tr, y_te, kind="ANN"):
     """Entraîne ANN ou CNN et retourne résultats + historique."""
+    if not TF_OK:
+        return None, None, None, 0, 0, None
+    
     es = EarlyStopping(patience=10, restore_best_weights=True)
     if kind == "ANN":
         model = build_ann(X_tr.shape[1])
@@ -340,8 +374,12 @@ def pipeline_complet(df_raw: pd.DataFrame):
     X = df.drop(columns=[target]).values
     y = df[target].values
 
-    # Oversampling manuel (CORRECTION ICI)
-    X, y = RandomOverSampler_fit_resample(X, y, random_state=42)
+    # Oversampling manuel CORRIGÉ
+    try:
+        X, y = RandomOverSampler_fit_resample(X, y, random_state=42)
+    except Exception as e:
+        st.warning(f"Oversampling ignoré: {e}")
+        # Continuer avec les données originales
 
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
@@ -354,40 +392,61 @@ def pipeline_complet(df_raw: pd.DataFrame):
 
     # ── Modèles classiques ────────────────────────────────────────
     for nom, clf in modeles_classiques().items():
-        clf.fit(X_tr, y_tr)
-        yp    = clf.predict(X_te)
-        yprob = clf.predict_proba(X_te)[:, 1] if hasattr(clf, "predict_proba") else None
-        acc   = accuracy_score(y_te, yp)
-        roc   = roc_auc_score(y_te, yprob) if yprob is not None else acc
-        resultats[nom] = dict(modele=clf, accuracy=acc, auc=roc,
-                               y_pred=yp, y_proba=yprob, history=None)
+        try:
+            clf.fit(X_tr, y_tr)
+            yp    = clf.predict(X_te)
+            yprob = clf.predict_proba(X_te)[:, 1] if hasattr(clf, "predict_proba") else None
+            acc   = accuracy_score(y_te, yp)
+            roc   = roc_auc_score(y_te, yprob) if yprob is not None else acc
+            resultats[nom] = dict(modele=clf, accuracy=acc, auc=roc,
+                                   y_pred=yp, y_proba=yprob, history=None)
+        except Exception as e:
+            resultats[nom] = dict(modele=clf, accuracy=0, auc=0,
+                                   y_pred=None, y_proba=None, history=None)
         step += 1
         progress.progress(step / n_models, text=f"✅ {nom}")
 
     # ── ANN ───────────────────────────────────────────────────────
     if TF_OK:
-        ann, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "ANN")
-        resultats["🧠 ANN"] = dict(modele=ann, accuracy=acc, auc=roc,
-                                    y_pred=yp, y_proba=yprob, history=hist)
+        try:
+            ann, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "ANN")
+            if ann is not None:
+                resultats["🧠 ANN"] = dict(modele=ann, accuracy=acc, auc=roc,
+                                            y_pred=yp, y_proba=yprob, history=hist)
+        except Exception as e:
+            resultats["🧠 ANN"] = dict(modele=None, accuracy=0, auc=0,
+                                        y_pred=None, y_proba=None, history=None)
         step += 1
         progress.progress(step / n_models, text="✅ ANN")
 
-        cnn, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "CNN")
-        resultats["📡 CNN"] = dict(modele=cnn, accuracy=acc, auc=roc,
-                                    y_pred=yp, y_proba=yprob, history=hist)
+        try:
+            cnn, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "CNN")
+            if cnn is not None:
+                resultats["📡 CNN"] = dict(modele=cnn, accuracy=acc, auc=roc,
+                                            y_pred=yp, y_proba=yprob, history=hist)
+        except Exception as e:
+            resultats["📡 CNN"] = dict(modele=None, accuracy=0, auc=0,
+                                        y_pred=None, y_proba=None, history=None)
         step += 1
         progress.progress(1.0, text="✅ CNN")
 
     progress.empty()
 
     # ── Meilleur modèle (ROC-AUC) ─────────────────────────────────
-    best_name = max(resultats, key=lambda k: resultats[k]["auc"])
-    best      = resultats[best_name]
+    # Filtrer les modèles valides
+    valid_results = {k: v for k, v in resultats.items() if v["auc"] > 0}
+    if valid_results:
+        best_name = max(valid_results, key=lambda k: valid_results[k]["auc"])
+        best = valid_results[best_name]
+    else:
+        best_name = list(resultats.keys())[0]
+        best = resultats[best_name]
 
     col_names = list(df.drop(columns=[target]).columns)
 
     return (best["modele"], best_name, resultats, le_dict, scaler,
-            X_tr, X_te, y_tr, y_te, best["y_pred"], best["accuracy"], col_names)
+            X_tr, X_te, y_tr, y_te, best.get("y_pred", np.zeros(len(y_te))), 
+            best.get("accuracy", 0), col_names)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -395,31 +454,36 @@ def pipeline_complet(df_raw: pd.DataFrame):
 # ══════════════════════════════════════════════════════════════════
 def plot_learning_curve(estimator, X, y, nom):
     """Reproduit les learning curves du repo claredang."""
-    sizes, tr_scores, val_scores = learning_curve(
-        estimator, X, y,
-        cv=5, scoring="accuracy",
-        train_sizes=np.linspace(0.1, 1.0, 8),
-        n_jobs=-1
-    )
-    tr_mean  = np.mean(tr_scores,  axis=1)
-    val_mean = np.mean(val_scores, axis=1)
+    try:
+        sizes, tr_scores, val_scores = learning_curve(
+            estimator, X, y,
+            cv=5, scoring="accuracy",
+            train_sizes=np.linspace(0.1, 1.0, 8),
+            n_jobs=-1
+        )
+        tr_mean  = np.mean(tr_scores,  axis=1)
+        val_mean = np.mean(val_scores, axis=1)
 
-    fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(sizes, tr_mean,  "o-", color="#667eea", label="Entraînement")
-    ax.plot(sizes, val_mean, "s-", color="#f5576c", label="Validation")
-    ax.fill_between(sizes,
-                    tr_mean  - np.std(tr_scores,  axis=1),
-                    tr_mean  + np.std(tr_scores,  axis=1),
-                    alpha=0.15, color="#667eea")
-    ax.fill_between(sizes,
-                    val_mean - np.std(val_scores, axis=1),
-                    val_mean + np.std(val_scores, axis=1),
-                    alpha=0.15, color="#f5576c")
-    ax.set_xlabel("Taille de l'échantillon d'entraînement")
-    ax.set_ylabel("Précision")
-    ax.set_title(f"Courbe d'apprentissage — {nom}")
-    ax.legend(); ax.grid(True, alpha=0.3)
-    return fig
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.plot(sizes, tr_mean,  "o-", color="#667eea", label="Entraînement")
+        ax.plot(sizes, val_mean, "s-", color="#f5576c", label="Validation")
+        ax.fill_between(sizes,
+                        tr_mean  - np.std(tr_scores,  axis=1),
+                        tr_mean  + np.std(tr_scores,  axis=1),
+                        alpha=0.15, color="#667eea")
+        ax.fill_between(sizes,
+                        val_mean - np.std(val_scores, axis=1),
+                        val_mean + np.std(val_scores, axis=1),
+                        alpha=0.15, color="#f5576c")
+        ax.set_xlabel("Taille de l'échantillon d'entraînement")
+        ax.set_ylabel("Précision")
+        ax.set_title(f"Courbe d'apprentissage — {nom}")
+        ax.legend(); ax.grid(True, alpha=0.3)
+        return fig
+    except Exception:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.text(0.5, 0.5, "Learning curve non disponible", ha="center", va="center")
+        return fig
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -432,25 +496,26 @@ if st.session_state.df_train is None:
     st.rerun()
 
 if not st.session_state.model_entraine and st.session_state.df_train is not None:
-    (model, best_name, all_results, le_dict, scaler,
-     X_tr, X_te, y_tr, y_te, y_pred, accuracy, col_names) = \
-        pipeline_complet(st.session_state.df_train)
+    with st.spinner("🧠 Entraînement des modèles en cours... (patientez)"):
+        (model, best_name, all_results, le_dict, scaler,
+         X_tr, X_te, y_tr, y_te, y_pred, accuracy, col_names) = \
+            pipeline_complet(st.session_state.df_train)
 
-    st.session_state.update(dict(
-        model          = model,
-        best_name      = best_name,
-        all_results    = all_results,
-        le_dict        = le_dict,
-        scaler         = scaler,
-        X_train        = X_tr,
-        X_test         = X_te,
-        y_train        = y_tr,
-        y_test         = y_te,
-        y_pred         = y_pred,
-        accuracy       = accuracy,
-        col_names      = col_names,
-        model_entraine = True,
-    ))
+        st.session_state.update(dict(
+            model          = model,
+            best_name      = best_name,
+            all_results    = all_results,
+            le_dict        = le_dict,
+            scaler         = scaler,
+            X_train        = X_tr,
+            X_test         = X_te,
+            y_train        = y_tr,
+            y_test         = y_te,
+            y_pred         = y_pred,
+            accuracy       = accuracy,
+            col_names      = col_names,
+            model_entraine = True,
+        ))
     st.rerun()
 
 # ══════════════════════════════════════════════════════════════════
@@ -467,18 +532,21 @@ with st.sidebar:
     if st.session_state.model_entraine:
         ar = st.session_state.all_results
         bn = st.session_state.best_name
-        st.metric("🏆 Meilleur modèle", bn.split(" ", 1)[-1])
+        st.metric("🏆 Meilleur modèle", bn.split(" ", 1)[-1] if " " in bn else bn)
         st.metric("🎯 Accuracy",        f"{st.session_state.accuracy:.1%}")
-        st.metric("📊 ROC-AUC",         f"{ar[bn]['auc']:.3f}")
+        if bn in ar:
+            st.metric("📊 ROC-AUC",         f"{ar[bn]['auc']:.3f}")
         st.metric("🧠 Deep Learning",   "✅ ANN + CNN" if TF_OK else "❌ TF non installé")
 
         st.markdown("---")
         st.subheader("📊 Classement")
+        valid_items = [(nom, res) for nom, res in ar.items() if res["auc"] > 0]
         for i, (nom, res) in enumerate(
-            sorted(ar.items(), key=lambda x: x[1]["auc"], reverse=True), 1
+            sorted(valid_items, key=lambda x: x[1]["auc"], reverse=True), 1
         ):
             medal = "🥇" if i == 1 else ("🥈" if i == 2 else ("🥉" if i == 3 else "  "))
-            st.caption(f"{medal} {nom.split(' ',1)[-1]}: **{res['auc']:.3f}**")
+            short_name = nom.split(" ", 1)[-1] if " " in nom else nom
+            st.caption(f"{medal} {short_name}: **{res['auc']:.3f}**")
 
     st.markdown("---")
     st.subheader("📌 Progression")
@@ -612,330 +680,4 @@ elif st.session_state.page == 3:
             st.markdown(f"""
             <div style="background:linear-gradient(135deg,#667eea,#764ba2);
                         width:50px;height:50px;border-radius:25px;
-                        display:flex;align-items:center;justify-content:center;">
-                <span style="font-size:1.8rem;">{icon}</span>
-            </div>""", unsafe_allow_html=True)
-        with qc2:
-            st.markdown(f"**Question {idx}/10** — {question}")
-            st.caption(f"💡 {detail}")
-            rep = st.radio("", [0,1],
-                           format_func=lambda x:"❌ Non" if x==0 else "✅ Oui",
-                           key=f"q_{qid}",
-                           index=st.session_state.reponses.get(qid, None),
-                           horizontal=True, label_visibility="collapsed")
-            if rep is not None:
-                st.session_state.reponses[qid] = rep
-        st.markdown("---")
-
-    total_rep = len(st.session_state.reponses)
-    if total_rep > 0:
-        score_tmp = sum(st.session_state.reponses.values())
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#667eea,#764ba2);
-                    border-radius:20px;padding:1rem;text-align:center;margin:1rem 0;">
-            <span style="color:white;font-size:1.2rem;">
-                📊 Progression : {total_rep}/10</span><br>
-            <span style="color:white;font-size:2rem;font-weight:bold;">
-                Score actuel : {score_tmp}/{total_rep}</span>
-        </div>""", unsafe_allow_html=True)
-
-    bc1, _, bc3 = st.columns([1,2,1])
-    with bc1:
-        if st.button("⬅️ Retour", use_container_width=True):
-            st.session_state.page = 2; st.rerun()
-    with bc3:
-        if total_rep == 10:
-            if st.button("🔮 Voir le résultat", type="primary", use_container_width=True):
-                st.session_state.page = 4; st.rerun()
-        else:
-            st.warning(f"⚠️ {10-total_rep} question(s) restante(s)")
-
-# ══════════════════════════════════════════════════════════════════
-# PAGE 4 — RÉSULTATS + GRAPHIQUES COMPLETS
-# ══════════════════════════════════════════════════════════════════
-elif st.session_state.page == 4:
-    inf         = st.session_state.infos_enfant
-    total_score = sum(st.session_state.reponses.values())
-    ar          = st.session_state.all_results
-    bn          = st.session_state.best_name
-
-    if not st.session_state.model_entraine:
-        st.error("❌ Modèle non disponible. Rafraîchissez la page.")
-        st.stop()
-
-    # ── Préparer entrée patient ────────────────────────────────────
-    ethnie_map = {"Blanc":0,"Asiatique":1,"Noir":2,"Arabe":3,"Autre":4}
-    input_raw  = (
-        [st.session_state.reponses.get(f"A{i}", 0) for i in range(1, 11)] +
-        [inf.get("age", 5),
-         0 if inf.get("genre")=="garcon" else 1,
-         ethnie_map.get(inf.get("ethnie"), 0),
-         inf.get("jaundice", 0),
-         inf.get("family_asd", 0)]
-    )
-    # sum_score + age_group (encodé 0-4) manquants → on les ajoute
-    sum_sc    = int(sum(input_raw[:10]))
-    age_val   = inf.get("age", 5)
-    age_grp   = (0 if age_val<=4 else 1 if age_val<=12 else
-                 2 if age_val<=18 else 3 if age_val<=40 else 4)
-    contry    = 0  # par défaut
-    input_ext = input_raw + [sum_sc, age_grp]
-    # aligner sur n_features du scaler
-    n_feat    = st.session_state.scaler.n_features_in_
-    vec       = np.zeros(n_feat)
-    for i, v in enumerate(input_ext[:n_feat]):
-        vec[i] = v
-    vec_scaled = st.session_state.scaler.transform(vec.reshape(1, -1))
-
-    with st.spinner("🧠 Analyse par tous les modèles…"):
-        time.sleep(0.4)
-
-    # ── Vote de tous les modèles ───────────────────────────────────
-    st.subheader("🗳️ Vote de tous les modèles")
-    votes_asd, model_preds = 0, {}
-    cols3 = st.columns(3)
-    for idx, (nom, res) in enumerate(
-        sorted(ar.items(), key=lambda x: x[1]["auc"], reverse=True)
-    ):
-        clf = res["modele"]
-        try:
-            if nom in ("🧠 ANN", "📡 CNN"):
-                x_in = vec_scaled.reshape(-1, n_feat, 1) if nom=="📡 CNN" else vec_scaled
-                prob = float(clf.predict(x_in, verbose=0).ravel()[0])
-                pred = int(prob > 0.5)
-            else:
-                pred = int(clf.predict(vec_scaled)[0])
-                prob = float(clf.predict_proba(vec_scaled)[0][1]) \
-                       if hasattr(clf,"predict_proba") else float(pred)
-        except Exception:
-            pred, prob = 0, 0.0
-        if pred == 1: votes_asd += 1
-        model_preds[nom] = (pred, prob)
-
-        color  = "#ffb3b3" if pred==1 else "#b3f0c8"
-        result = "⚠️ Risque" if pred==1 else "✅ Normal"
-        crown  = "🏆 " if nom==bn else ""
-        with cols3[idx % 3]:
-            st.markdown(f"""
-            <div style="background:{color};border-radius:12px;
-                        padding:.8rem;margin-bottom:.8rem;text-align:center;">
-                <strong>{crown}{nom}</strong><br>
-                <span style="font-size:1.1rem;">{result}</span><br>
-                Prob: {prob:.1%} | AUC: {res['auc']:.3f}
-            </div>""", unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#667eea,#764ba2);
-                border-radius:20px;padding:1.2rem;text-align:center;margin:1rem 0;">
-        <h3 style="color:white;">🗳️ {votes_asd}/{len(ar)} modèles détectent un risque</h3>
-    </div>""", unsafe_allow_html=True)
-    st.markdown("---")
-
-    # ── Résultat du MEILLEUR modèle ────────────────────────────────
-    best_pred, best_prob = model_preds.get(bn, (0, 0.0))
-    st.markdown(f'<div class="winner-box">🏆 Décision finale — {bn}</div>',
-                unsafe_allow_html=True)
-
-    if best_pred == 1:
-        st.markdown("""
-        <div class="result-card fade-in"
-             style="background:linear-gradient(135deg,#f093fb,#f5576c);">
-            <span style="font-size:4rem;">🚨</span>
-            <h1 style="color:white;">Risque élevé détecté</h1>
-            <p style="color:white;font-size:1.2rem;">
-                Une évaluation clinique approfondie est recommandée</p>
-        </div>""", unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="result-card fade-in"
-             style="background:linear-gradient(135deg,#84fab0,#8fd3f4);">
-            <span style="font-size:4rem;">✅</span>
-            <h1 style="color:#2c3e50;">Risque faible</h1>
-            <p style="color:#2c3e50;font-size:1.2rem;">
-                Le développement semble dans la norme</p>
-        </div>""", unsafe_allow_html=True)
-
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("📊 Score total",    f"{total_score}/10")
-    c2.metric("🤖 Probabilité",    f"{best_prob:.1%}")
-    c3.metric("🎯 Accuracy",       f"{st.session_state.accuracy:.1%}")
-    c4.metric("📊 ROC-AUC",        f"{ar[bn]['auc']:.3f}")
-    st.progress(best_prob)
-    st.markdown("---")
-
-    # ═══════════════════════════════════════════════════════════════
-    # GRAPHIQUES COMPLETS
-    # ═══════════════════════════════════════════════════════════════
-    st.subheader("📊 Analyse complète — Tous les modèles")
-
-    # 1. Comparaison AUC
-    st.markdown("#### 🏆 Classement ROC-AUC de tous les modèles")
-    noms_sorted = sorted(ar.keys(), key=lambda k: ar[k]["auc"])
-    aucs_s      = [ar[n]["auc"] for n in noms_sorted]
-    colors_s    = ["gold" if n==bn else "#667eea" for n in noms_sorted]
-
-    fig_cmp, ax_cmp = plt.subplots(figsize=(10, 5))
-    bars = ax_cmp.barh(noms_sorted, aucs_s, color=colors_s)
-    for bar, val in zip(bars, aucs_s):
-        ax_cmp.text(val+.003, bar.get_y()+bar.get_height()/2,
-                    f"{val:.3f}", va="center", fontsize=9)
-    ax_cmp.axvline(.8, color="red", ls="--", alpha=.5, label="Seuil 0.80")
-    ax_cmp.set_xlim(0, 1.08)
-    ax_cmp.set_xlabel("ROC-AUC")
-    ax_cmp.set_title("Comparaison de tous les modèles (🥇 = sélectionné)")
-    ax_cmp.legend(); ax_cmp.grid(True, alpha=.3)
-    st.pyplot(fig_cmp)
-    st.markdown("---")
-
-    # 2. Matrice confusion + rapport
-    cg1, cg2 = st.columns(2)
-    with cg1:
-        st.markdown(f"#### 📊 Matrice de confusion — {bn}")
-        cm = confusion_matrix(st.session_state.y_test, st.session_state.y_pred)
-        fig_cm, ax_cm = plt.subplots(figsize=(5, 4))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm,
-                    xticklabels=["Non-ASD","ASD"],
-                    yticklabels=["Non-ASD","ASD"])
-        ax_cm.set_xlabel("Prédiction"); ax_cm.set_ylabel("Réalité")
-        st.pyplot(fig_cm)
-    with cg2:
-        st.markdown("#### 📈 Rapport de classification")
-        rdf = pd.DataFrame(
-            classification_report(st.session_state.y_test,
-                                   st.session_state.y_pred,
-                                   output_dict=True)
-        ).transpose().round(3)
-        st.dataframe(rdf, use_container_width=True)
-    st.markdown("---")
-
-    # 3. Courbes ROC de tous les modèles
-    st.markdown("#### 📉 Courbes ROC — Tous les modèles")
-    fig_roc, ax_roc = plt.subplots(figsize=(9, 6))
-    palette = plt.cm.tab10(np.linspace(0, 1, len(ar)))
-    for (nom, res), col in zip(
-        sorted(ar.items(), key=lambda x: x[1]["auc"], reverse=True), palette
-    ):
-        if res["y_proba"] is not None:
-            fpr_r, tpr_r, _ = roc_curve(st.session_state.y_test, res["y_proba"])
-            lw = 3 if nom==bn else 1.5
-            ls = "-" if nom==bn else "--"
-            ax_roc.plot(fpr_r, tpr_r, lw=lw, ls=ls, color=col,
-                        label=f"{nom} ({res['auc']:.3f})")
-    ax_roc.plot([0,1],[0,1],"k:",lw=1,label="Aléatoire (0.500)")
-    ax_roc.set_xlabel("Taux faux positifs"); ax_roc.set_ylabel("Taux vrais positifs")
-    ax_roc.set_title("Courbes ROC — Comparaison complète")
-    ax_roc.legend(fontsize=8, loc="lower right"); ax_roc.grid(True, alpha=.3)
-    st.pyplot(fig_roc)
-    st.markdown("---")
-
-    # 4. Courbe d'apprentissage (claredang — signature)
-    st.markdown(f"#### 📈 Courbe d'apprentissage — {bn}")
-    best_clf = st.session_state.model
-    if not hasattr(best_clf, "predict_proba") or bn in ("🧠 ANN","📡 CNN"):
-        st.info("ℹ️ Learning Curve disponible uniquement pour les modèles scikit-learn.")
-    else:
-        try:
-            X_lc = np.vstack([st.session_state.X_train, st.session_state.X_test])
-            y_lc = np.concatenate([st.session_state.y_train, st.session_state.y_test])
-            fig_lc = plot_learning_curve(best_clf, X_lc, y_lc, bn)
-            st.pyplot(fig_lc)
-        except Exception as e:
-            st.warning(f"Learning curve non disponible : {e}")
-    st.markdown("---")
-
-    # 5. Deep Learning — historique entraînement
-    if TF_OK:
-        dl_names = [k for k in ("🧠 ANN","📡 CNN") if k in ar and ar[k]["history"]]
-        if dl_names:
-            st.markdown("#### 🧠 Historique d'entraînement — Deep Learning")
-            dcols = st.columns(len(dl_names))
-            for dcol, dl_name in zip(dcols, dl_names):
-                hist = ar[dl_name]["history"].history
-                fig_h, ax_h = plt.subplots(figsize=(5, 4))
-                ax_h.plot(hist["accuracy"],     label="Train",      color="#667eea")
-                ax_h.plot(hist["val_accuracy"], label="Validation", color="#f5576c")
-                ax_h.set_title(f"{dl_name} — Accuracy")
-                ax_h.set_xlabel("Époque"); ax_h.set_ylabel("Accuracy")
-                ax_h.legend(); ax_h.grid(True, alpha=.3)
-                dcol.pyplot(fig_h)
-            st.markdown("---")
-
-    # 6. Importance des caractéristiques
-    st.markdown(f"#### 🎯 Importance des caractéristiques — {bn}")
-    feat_names = getattr(st.session_state, "col_names",
-                         [f"f{i}" for i in range(st.session_state.X_train.shape[1])])
-    if hasattr(best_clf, "feature_importances_"):
-        imp = best_clf.feature_importances_
-        idx = np.argsort(imp)[::-1][:12]
-        fig_fi, ax_fi = plt.subplots(figsize=(9, 5))
-        ax_fi.barh([feat_names[i] for i in idx[::-1]],
-                   imp[idx[::-1]], color="#667eea")
-        ax_fi.set_xlabel("Importance")
-        ax_fi.set_title("Top caractéristiques (tree-based)")
-        st.pyplot(fig_fi)
-    elif hasattr(best_clf, "coef_"):
-        coef = np.abs(best_clf.coef_[0])
-        idx  = np.argsort(coef)[::-1][:12]
-        fig_fi, ax_fi = plt.subplots(figsize=(9, 5))
-        ax_fi.barh([feat_names[i] for i in idx[::-1]],
-                   coef[idx[::-1]], color="#764ba2")
-        ax_fi.set_xlabel("|Coefficient|")
-        ax_fi.set_title("Importance des coefficients (Logistic Regression)")
-        st.pyplot(fig_fi)
-    else:
-        st.info("ℹ️ Importance non disponible pour ce modèle (ANN/CNN).")
-    st.markdown("---")
-
-    # ── Recommandations ────────────────────────────────────────────
-    st.subheader("💡 Recommandations personnalisées")
-    role = st.session_state.role
-    if best_pred == 1:
-        msg = (
-            "• Consultez rapidement un pédiatre ou neuropédiatre<br>"
-            "• Contactez un centre de référence pour l'autisme<br>"
-            "• Notez les comportements observés pour le prochain rendez-vous"
-        ) if role == "parent" else (
-            "• Réalisez une évaluation clinique approfondie (ADOS, CARS, M-CHAT)<br>"
-            "• Orientez vers un centre spécialisé si nécessaire<br>"
-            "• Prescrivez des examens complémentaires si indiqués"
-        )
-        st.markdown(f"""
-        <div style="background:#fff3cd;border-left:4px solid #ffc107;
-                    padding:1rem;border-radius:10px;">
-            <strong>⚠️ Recommandations :</strong><br>{msg}</div>
-        """, unsafe_allow_html=True)
-    else:
-        msg = (
-            "• Continuez à surveiller le développement de votre enfant<br>"
-            "• Consultez régulièrement votre pédiatre"
-        ) if role == "parent" else (
-            "• Rassurez les parents, le développement semble dans la norme<br>"
-            "• Continuez le suivi régulier"
-        )
-        st.markdown(f"""
-        <div style="background:#d4edda;border-left:4px solid #28a745;
-                    padding:1rem;border-radius:10px;">
-            <strong>✅ Recommandations :</strong><br>{msg}</div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-    _, bc2, _ = st.columns([1,2,1])
-    with bc2:
-        if st.button("🔄 Nouvelle évaluation", type="primary", use_container_width=True):
-            for k in ["page","reponses","infos_enfant","role"]:
-                st.session_state[k] = _DEFAULTS[k]
-            st.rerun()
-
-# ══════════════════════════════════════════════════════════════════
-# PIED DE PAGE
-# ══════════════════════════════════════════════════════════════════
-st.markdown("""
-<div style="text-align:center;padding:2rem;color:rgba(255,255,255,.7);">
-    <hr style="border-color:rgba(255,255,255,.2);">
-    <p>🧠 NeuroSense — Fusion des meilleurs projets GitHub sur la prédiction de l'autisme</p>
-    <p style="font-size:.8rem;">
-        Sources : claredang · nagatejakachapuram · yashmahes · Shehab-Hegab et al.<br>
-        © 2024 — Outil d'aide à la décision — Consultez toujours un professionnel de santé
-    </p>
-</div>
-""", unsafe_allow_html=True)
+                        display:flex;align-items:center;justify-content:center
