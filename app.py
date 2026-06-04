@@ -32,7 +32,34 @@ from sklearn.naive_bayes     import GaussianNB
 from sklearn.ensemble        import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.tree            import DecisionTreeClassifier
 from xgboost                 import XGBClassifier
-from imblearn.over_sampling  import RandomOverSampler
+
+# ── Remplacement de imblearn par une fonction maison ─────────────
+def random_oversample(X, y, random_state=42):
+    """Sur-échantillonnage aléatoire simple pour équilibrer les classes."""
+    np.random.seed(random_state)
+    unique, counts = np.unique(y, return_counts=True)
+    if len(unique) != 2:
+        return X, y
+    maj_class = unique[np.argmax(counts)]
+    min_class = unique[np.argmin(counts)]
+    X_min = X[y == min_class]
+    y_min = y[y == min_class]
+    X_maj = X[y == maj_class]
+    y_maj = y[y == maj_class]
+    # Dupliquer aléatoirement la classe minoritaire
+    n_min = len(X_min)
+    n_maj = len(X_maj)
+    if n_min >= n_maj:
+        return X, y
+    n_to_add = n_maj - n_min
+    indices = np.random.choice(n_min, n_to_add, replace=True)
+    X_min_extra = X_min[indices]
+    y_min_extra = y_min[indices]
+    X_res = np.vstack([X_maj, X_min, X_min_extra])
+    y_res = np.hstack([y_maj, y_min, y_min_extra])
+    # Mélanger final
+    shuffle = np.random.permutation(len(X_res))
+    return X_res[shuffle], y_res[shuffle]
 
 # ── TensorFlow / Keras (ANN + CNN) ────────────────────────────────
 try:
@@ -304,7 +331,7 @@ def pipeline_complet(df_raw: pd.DataFrame):
     """
     1. Feature Engineering
     2. Prétraitement
-    3. Oversampling
+    3. Oversampling (maison)
     4. Entraînement de TOUS les modèles (classiques + ANN + CNN)
     5. Sélection automatique du meilleur (ROC-AUC)
     """
@@ -316,9 +343,8 @@ def pipeline_complet(df_raw: pd.DataFrame):
     X = df.drop(columns=[target]).values
     y = df[target].values
 
-    # Oversampling (nagatejakachapuram)
-    ros = RandomOverSampler(random_state=42)
-    X, y = ros.fit_resample(X, y)
+    # Oversampling maison (remplacement de imblearn)
+    X, y = random_oversample(X, y, random_state=42)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
