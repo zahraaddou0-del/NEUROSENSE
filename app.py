@@ -32,7 +32,8 @@ from sklearn.naive_bayes     import GaussianNB
 from sklearn.ensemble        import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.tree            import DecisionTreeClassifier
 from xgboost                 import XGBClassifier
-# imblearn remplacé par oversampling manuel (compatible Python 3.14)
+
+# ── Fonction d'oversampling manuel (remplace imblearn) ────────────
 def RandomOverSampler_fit_resample(X, y, random_state=42):
     """Oversampling manuel — remplace imblearn.RandomOverSampler."""
     rng = np.random.RandomState(random_state)
@@ -293,7 +294,7 @@ def build_cnn(input_dim: int) -> "Sequential":
         GlobalAveragePooling1D(),
         Dense(64, activation="relu"),
         Dropout(0.3),
-        Dense(1,  activation="sigmoid"),
+        Dense(1,   activation="sigmoid"),
     ])
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
     return model
@@ -339,9 +340,8 @@ def pipeline_complet(df_raw: pd.DataFrame):
     X = df.drop(columns=[target]).values
     y = df[target].values
 
-    # Oversampling (nagatejakachapuram)
-    ros = RandomOverSampler(random_state=42)
-    X, y = ros.fit_resample(X, y)
+    # Oversampling manuel (correction ici)
+    X, y = RandomOverSampler_fit_resample(X, y, random_state=42)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
