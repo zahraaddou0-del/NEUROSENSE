@@ -340,7 +340,7 @@ def pipeline_complet(df_raw: pd.DataFrame):
     X = df.drop(columns=[target]).values
     y = df[target].values
 
-    # Oversampling manuel (correction ici)
+    # Oversampling manuel (CORRECTION ICI)
     X, y = RandomOverSampler_fit_resample(X, y, random_state=42)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
