@@ -3,20 +3,10 @@
 ╔══════════════════════════════════════════════════════════════════════════════════════╗
 ║                         🧠 NeuroSense — Détection Précoce de l'Autisme               ║
 ║                                                                                      ║
-║  ⚡ 10 MODÈLES (8 classiques + ANN + CNN)                                            ║
+║  ⚡ 6 MODÈLES UNIQUEMENT (Logistic Regression, SVC, Decision Tree, KNN, ANN, CNN)   ║
 ║  📈 TOUTES LES COURBES : ROC, Learning Curves, Historique Deep Learning             ║
 ║  📊 TOUTES LES MÉTRIQUES : Accuracy, Precision, Recall, F1, AUC, Matrice confusion  ║
 ║  🗳️ SYSTÈME DE VOTE : Décision collective de tous les modèles                       ║
-║                                                                                      ║
-║  Projets fusionnés :                                                                ║
-║  • claredang          → ANN, CNN, Learning Curves, 3 datasets                       ║
-║  • nagatejakachapuram → Feature Engineering, ROC-AUC, Oversampling, SVC, XGBoost    ║
-║  • yashmahes          → Random Forest, Gradient Boosting, Tkinter                   ║
-║  • Shehab-Hegab       → Logistic Regression, KNN                                    ║
-║  • prasanna24062004   → Random Forest, SVC, Streamlit                               ║
-║  • MASANAMUTHU22      → XGBoost                                                     ║
-║  • Ankita-M-24        → Decision Tree                                               ║
-║  • Anvesh-3           → KNN                                                         ║
 ╚══════════════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -28,10 +18,47 @@ import seaborn as sns
 import warnings
 import time
 import os
-from datetime import datetime
+import subprocess
+import sys
 
 warnings.filterwarnings("ignore")
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+# ──────────────────────────────────────────────────────────────────────────────────────
+# INSTALLATION AUTOMATIQUE DE TENSORFLOW SI NÉCESSAIRE
+# ──────────────────────────────────────────────────────────────────────────────────────
+def install_tensorflow():
+    """Installe TensorFlow automatiquement s'il n'est pas présent."""
+    try:
+        import tensorflow as tf
+        return True
+    except ImportError:
+        st.warning("📦 Installation de TensorFlow en cours... Veuillez patienter.")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "tensorflow", "-q"])
+            import tensorflow as tf
+            st.success("✅ TensorFlow installé avec succès !")
+            return True
+        except Exception as e:
+            st.error(f"❌ Impossible d'installer TensorFlow automatiquement: {e}")
+            st.info("💡 Veuillez installer TensorFlow manuellement: pip install tensorflow")
+            return False
+
+# Tentative d'installation de TensorFlow
+TF_OK = install_tensorflow()
+
+if TF_OK:
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import (
+        Dense, Dropout, Conv1D, MaxPooling1D, Flatten,
+        GlobalAveragePooling1D, BatchNormalization, Input
+    )
+    from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+    from tensorflow.keras.optimizers import Adam
+    st.success("✅ TensorFlow chargé avec succès ! ANN et CNN sont actifs.")
+else:
+    st.warning("⚠️ TensorFlow non disponible. Seuls les modèles classiques seront utilisés.")
 
 # ──────────────────────────────────────────────────────────────────────────────────────
 # IMPORTS SCIKIT-LEARN
@@ -46,134 +73,7 @@ from sklearn.metrics import (
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
-from xgboost import XGBClassifier
-
-# ──────────────────────────────────────────────────────────────────────────────────────
-# OVERSAMPLING MANUEL (alternative à imblearn pour éviter les conflits de version)
-# ──────────────────────────────────────────────────────────────────────────────────────
-def manual_oversample(X, y, random_state=42):
-    """
-    Équilibrage manuel des classes - Alternative à RandomOverSampler
-    pour éviter les problèmes de compatibilité avec Python 3.14
-    """
-    np.random.seed(random_state)
-    
-    # Convertir en array si nécessaire
-    X = np.array(X)
-    y = np.array(y)
-    
-    # Trouver les classes uniques
-    unique_classes = np.unique(y)
-    class_counts = {c: np.sum(y == c) for c in unique_classes}
-    max_count = max(class_counts.values())
-    
-    X_resampled = []
-    y_resampled = []
-    
-    for cls in unique_classes:
-        X_cls = X[y == cls]
-        y_cls = y[y == cls]
-        current_count = len(X_cls)
-        
-        if current_count < max_count:
-            # Besoin d'augmenter
-            indices = np.random.choice(current_count, max_count - current_count, replace=True)
-            X_extra = X_cls[indices]
-            y_extra = y_cls[indices]
-            X_resampled.extend(X_cls)
-            X_resampled.extend(X_extra)
-            y_resampled.extend(y_cls)
-            y_resampled.extend(y_extra)
-        else:
-            X_resampled.extend(X_cls)
-            y_resampled.extend(y_cls)
-    
-    return np.array(X_resampled), np.array(y_resampled)
-
-
-def manual_smote_simple(X, y, random_state=42, k=5):
-    """
-    Version simplifiée de SMOTE pour l'équilibrage
-    Alternative à imblearn pour éviter les problèmes de compatibilité
-    """
-    np.random.seed(random_state)
-    
-    X = np.array(X)
-    y = np.array(y)
-    
-    # Identifier la classe minoritaire
-    unique_classes = np.unique(y)
-    class_counts = {c: np.sum(y == c) for c in unique_classes}
-    majority_class = max(class_counts, key=class_counts.get)
-    minority_class = min(class_counts, key=class_counts.get)
-    
-    # Si les classes sont déjà équilibrées
-    if class_counts[majority_class] <= class_counts[minority_class] * 1.1:
-        return X, y
-    
-    n_to_generate = class_counts[majority_class] - class_counts[minority_class]
-    
-    # Extraire les échantillons de la classe minoritaire
-    X_minority = X[y == minority_class]
-    n_minority = len(X_minority)
-    
-    if n_minority < 2:
-        return manual_oversample(X, y, random_state)
-    
-    synthetic_samples = []
-    
-    for _ in range(n_to_generate):
-        # Choisir un échantillon aléatoire de la classe minoritaire
-        idx = np.random.randint(0, n_minority)
-        sample = X_minority[idx]
-        
-        # Trouver les k plus proches voisins
-        distances = np.sqrt(np.sum((X_minority - sample) ** 2, axis=1))
-        nearest_indices = np.argsort(distances)[1:min(k+1, n_minority)]
-        
-        if len(nearest_indices) == 0:
-            continue
-        
-        # Choisir un voisin aléatoire
-        neighbor_idx = np.random.choice(nearest_indices)
-        neighbor = X_minority[neighbor_idx]
-        
-        # Générer un nouvel échantillon synthétique
-        alpha = np.random.random()
-        synthetic = sample + alpha * (neighbor - sample)
-        synthetic_samples.append(synthetic)
-    
-    if synthetic_samples:
-        X_synthetic = np.array(synthetic_samples)
-        y_synthetic = np.full(len(X_synthetic), minority_class)
-        
-        X_resampled = np.vstack([X, X_synthetic])
-        y_resampled = np.hstack([y, y_synthetic])
-    else:
-        X_resampled, y_resampled = X, y
-    
-    return X_resampled, y_resampled
-
-
-# ──────────────────────────────────────────────────────────────────────────────────────
-# IMPORTS TENSORFLOW / KERAS (ANN + CNN)
-# ──────────────────────────────────────────────────────────────────────────────────────
-try:
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import (
-        Dense, Dropout, Conv1D, MaxPooling1D, Flatten,
-        GlobalAveragePooling1D, BatchNormalization, Input
-    )
-    from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-    from tensorflow.keras.optimizers import Adam
-    TF_OK = True
-except ImportError:
-    TF_OK = False
-    st.warning("⚠️ TensorFlow non installé. ANN et CNN seront désactivés.")
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION STREAMLIT
@@ -267,14 +167,6 @@ st.markdown("""
     to { opacity: 1; transform: translateY(0); }
 }
 
-.metric-card {
-    background: linear-gradient(135deg, #667eea15, #764ba215);
-    border-radius: 15px;
-    padding: 1rem;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
 .plot-container {
     background: white;
     border-radius: 15px;
@@ -307,8 +199,7 @@ _DEFAULTS = {
     "df_train": None,
     "col_names": None,
     "le_dict": None,
-    "model_performances": {},
-    "training_history": {}
+    "model_performances": {}
 }
 
 for k, v in _DEFAULTS.items():
@@ -328,7 +219,7 @@ def charger_donnees():
         try:
             df = pd.read_csv("train.csv")
         except FileNotFoundError:
-            # Génération de données synthétiques avancées
+            # Génération de données synthétiques
             np.random.seed(42)
             n = 2000
             
@@ -362,7 +253,7 @@ def charger_donnees():
 
 
 def ingenierie_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Feature Engineering avancé - Sources: nagatejakachapuram + claredang"""
+    """Feature Engineering avancé."""
     df = df.copy()
     
     # Nettoyage
@@ -398,7 +289,6 @@ def ingenierie_features(df: pd.DataFrame) -> pd.DataFrame:
             labels=[0, 1, 2, 3, 4, 5]
         ).astype(int)
         
-        # Interaction features
         if q_cols:
             df["age_score_interaction"] = df["age"] * df["avg_score"]
     
@@ -445,26 +335,47 @@ def pretraiter(df: pd.DataFrame, is_train=True, le_dict=None, scaler=None):
     return df, le_dict, scaler
 
 
+def manual_oversample(X, y, random_state=42):
+    """Équilibrage manuel des classes."""
+    np.random.seed(random_state)
+    
+    X = np.array(X)
+    y = np.array(y)
+    
+    unique_classes = np.unique(y)
+    class_counts = {c: np.sum(y == c) for c in unique_classes}
+    max_count = max(class_counts.values())
+    
+    X_resampled = []
+    y_resampled = []
+    
+    for cls in unique_classes:
+        X_cls = X[y == cls]
+        y_cls = y[y == cls]
+        current_count = len(X_cls)
+        
+        if current_count < max_count:
+            indices = np.random.choice(current_count, max_count - current_count, replace=True)
+            X_extra = X_cls[indices]
+            y_extra = y_cls[indices]
+            X_resampled.extend(X_cls)
+            X_resampled.extend(X_extra)
+            y_resampled.extend(y_cls)
+            y_resampled.extend(y_extra)
+        else:
+            X_resampled.extend(X_cls)
+            y_resampled.extend(y_cls)
+    
+    return np.array(X_resampled), np.array(y_resampled)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════════════
-# MODÈLES CLASSIQUES (8 modèles)
+# MODÈLES CLASSIQUES (4 MODÈLES UNIQUEMENT)
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 def modeles_classiques():
-    """Dictionnaire des 8 modèles classiques."""
+    """Dictionnaire des 4 modèles classiques (sans RF, XGBoost, GB, NB)."""
     return {
-        "🌲 Random Forest": RandomForestClassifier(
-            n_estimators=200, max_depth=15, min_samples_split=5,
-            min_samples_leaf=2, random_state=42, n_jobs=-1
-        ),
-        "⚡ XGBoost": XGBClassifier(
-            n_estimators=150, max_depth=6, learning_rate=0.1,
-            subsample=0.8, colsample_bytree=0.8,
-            use_label_encoder=False, eval_metric="logloss", random_state=42
-        ),
-        "🚀 Gradient Boosting": GradientBoostingClassifier(
-            n_estimators=150, learning_rate=0.1, max_depth=5,
-            subsample=0.8, random_state=42
-        ),
         "📐 Logistic Regression": LogisticRegression(
             C=1.0, max_iter=1000, solver="lbfgs", random_state=42
         ),
@@ -476,8 +387,7 @@ def modeles_classiques():
         ),
         "👥 KNN": KNeighborsClassifier(
             n_neighbors=7, weights="distance", metric="minkowski", p=2
-        ),
-        "🔔 Naive Bayes": GaussianNB()
+        )
     }
 
 
@@ -592,7 +502,7 @@ def plot_roc_curves(results, y_test, best_name):
     """Dessine toutes les courbes ROC."""
     fig, ax = plt.subplots(figsize=(10, 7))
     
-    colors = plt.cm.tab20(np.linspace(0, 1, len(results)))
+    colors = plt.cm.tab10(np.linspace(0, 1, len(results)))
     
     for (nom, res), col in zip(sorted(results.items(), key=lambda x: x[1]["auc"], reverse=True), colors):
         if res["y_proba"] is not None:
@@ -603,8 +513,8 @@ def plot_roc_curves(results, y_test, best_name):
                     label=f"{nom} (AUC = {res['auc']:.3f})")
     
     ax.plot([0, 1], [0, 1], "k:", lw=2, label="Modèle aléatoire (AUC = 0.5)")
-    ax.set_xlabel("Taux de faux positifs (1 - Spécificité)", fontsize=12)
-    ax.set_ylabel("Taux de vrais positifs (Sensibilité)", fontsize=12)
+    ax.set_xlabel("Taux de faux positifs", fontsize=12)
+    ax.set_ylabel("Taux de vrais positifs", fontsize=12)
     ax.set_title("📈 Courbes ROC de tous les modèles", fontsize=14, fontweight="bold")
     ax.legend(loc="lower right", fontsize=8)
     ax.grid(True, alpha=0.3)
@@ -618,7 +528,7 @@ def plot_pr_curves(results, y_test, best_name):
     """Dessine toutes les courbes Precision-Recall."""
     fig, ax = plt.subplots(figsize=(10, 7))
     
-    colors = plt.cm.tab20(np.linspace(0, 1, len(results)))
+    colors = plt.cm.tab10(np.linspace(0, 1, len(results)))
     
     for (nom, res), col in zip(sorted(results.items(), key=lambda x: x[1]["auc"], reverse=True), colors):
         if res["y_proba"] is not None:
@@ -631,7 +541,7 @@ def plot_pr_curves(results, y_test, best_name):
     
     ax.set_xlabel("Rappel (Recall)", fontsize=12)
     ax.set_ylabel("Précision (Precision)", fontsize=12)
-    ax.set_title("📊 Courbes Précision-Rappel de tous les modèles", fontsize=14, fontweight="bold")
+    ax.set_title("📊 Courbes Précision-Rappel", fontsize=14, fontweight="bold")
     ax.legend(loc="lower left", fontsize=8)
     ax.grid(True, alpha=0.3)
     ax.set_xlim([-0.02, 1.02])
@@ -662,10 +572,10 @@ def plot_learning_curve(estimator, X, y, model_name):
     ax.fill_between(train_sizes, test_mean - test_std, test_mean + test_std,
                     alpha=0.2, color="#f5576c")
     
-    ax.plot(train_sizes, train_mean, "o-", color="#667eea", lw=2, label="Score entraînement")
-    ax.plot(train_sizes, test_mean, "s-", color="#f5576c", lw=2, label="Score validation")
+    ax.plot(train_sizes, train_mean, "o-", color="#667eea", lw=2, label="Entraînement")
+    ax.plot(train_sizes, test_mean, "s-", color="#f5576c", lw=2, label="Validation")
     
-    ax.set_xlabel("Taille de l'échantillon d'entraînement", fontsize=12)
+    ax.set_xlabel("Taille de l'échantillon", fontsize=12)
     ax.set_ylabel("Score de précision", fontsize=12)
     ax.set_title(f"📉 Courbe d'apprentissage — {model_name}", fontsize=14, fontweight="bold")
     ax.legend(loc="lower right", fontsize=10)
@@ -726,7 +636,7 @@ def plot_model_comparison(results):
     aucs = [results[n]["auc"] for n in names]
     accs = [results[n]["accuracy"] for n in names]
     
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
     
     x = np.arange(len(names))
     width = 0.35
@@ -736,14 +646,13 @@ def plot_model_comparison(results):
     
     ax.set_xlabel("Modèles", fontsize=12)
     ax.set_ylabel("Score", fontsize=12)
-    ax.set_title("🏆 Comparaison des performances de tous les modèles", fontsize=14, fontweight="bold")
+    ax.set_title("🏆 Comparaison des performances", fontsize=14, fontweight="bold")
     ax.set_xticks(x)
     ax.set_xticklabels([n.split(" ")[0] for n in names], rotation=45, ha="right")
     ax.legend(loc="lower right", fontsize=11)
     ax.set_ylim([0, 1.05])
     ax.grid(True, alpha=0.3, axis="y")
     
-    # Ajouter les valeurs sur les barres
     for bar, val in zip(bars1, accs):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
                 f"{val:.3f}", ha="center", va="bottom", fontsize=8)
@@ -763,7 +672,6 @@ def plot_training_history(history, model_name):
     
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
-    # Accuracy
     axes[0].plot(history.history["accuracy"], "o-", color="#667eea", label="Train", lw=2)
     axes[0].plot(history.history["val_accuracy"], "s-", color="#f5576c", label="Validation", lw=2)
     axes[0].set_xlabel("Époque", fontsize=11)
@@ -772,7 +680,6 @@ def plot_training_history(history, model_name):
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
     
-    # Loss
     axes[1].plot(history.history["loss"], "o-", color="#667eea", label="Train", lw=2)
     axes[1].plot(history.history["val_loss"], "s-", color="#f5576c", label="Validation", lw=2)
     axes[1].set_xlabel("Époque", fontsize=11)
@@ -802,8 +709,7 @@ def pipeline_complet(df_raw: pd.DataFrame):
     X = df.drop(columns=[target]).values
     y = df[target].values
     
-    with st.spinner("⚖️ Équilibrage des classes (méthode manuelle)..."):
-        # Utilisation de l'oversampling manuel au lieu de SMOTE
+    with st.spinner("⚖️ Équilibrage des classes..."):
         X, y = manual_oversample(X, y, random_state=42)
     
     X_tr, X_te, y_tr, y_te = train_test_split(
@@ -880,7 +786,6 @@ def pipeline_complet(df_raw: pd.DataFrame):
     status_text.empty()
     progress_bar.empty()
     
-    # Sélection du meilleur modèle (basé sur AUC)
     best_name = max(results, key=lambda k: results[k]["auc"])
     best = results[best_name]
     
@@ -898,10 +803,8 @@ def pipeline_complet(df_raw: pd.DataFrame):
 
 def preparer_patient(reponses, infos, scaler, n_features):
     """Prépare les données d'un patient pour la prédiction."""
-    # Questions A1-A10
     q_scores = [reponses.get(f"A{i}", 0) for i in range(1, 11)]
     
-    # Informations démographiques
     ethnie_map = {
         "Blanc": 0, "Asiatique": 1, "Noir": 2,
         "Arabe": 3, "Autre": 4, "White-European": 0,
@@ -915,12 +818,10 @@ def preparer_patient(reponses, infos, scaler, n_features):
     jaundice = infos.get("jaundice", 0)
     family_asd = infos.get("family_asd", 0)
     
-    # Features calculées
     sum_score = sum(q_scores)
     avg_score = sum_score / 10 if sum_score > 0 else 0
     high_risk = 1 if sum_score >= 7 else 0
     
-    # Age group
     if age <= 4:
         age_group = 0
     elif age <= 12:
@@ -941,7 +842,6 @@ def preparer_patient(reponses, infos, scaler, n_features):
         sum_score, avg_score, high_risk, age_group, age_interaction
     ]
     
-    # Aligner sur le nombre de features attendues
     vec = np.zeros(n_features)
     for i, v in enumerate(input_vector[:n_features]):
         vec[i] = v
@@ -1003,13 +903,13 @@ with st.sidebar:
         st.metric("📊 AUC", f"{results[best]['auc']:.3f}")
         
         st.markdown("---")
-        st.markdown("### 🥇 Top 5 modèles")
-        sorted_models = sorted(results.items(), key=lambda x: x[1]["auc"], reverse=True)[:5]
+        st.markdown("### 🥇 Classement")
+        sorted_models = sorted(results.items(), key=lambda x: x[1]["auc"], reverse=True)
         
         for i, (name, metrics) in enumerate(sorted_models, 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
             st.markdown(f"{medal} **{name.split(' ')[-1]}**")
-            st.caption(f"AUC: {metrics['auc']:.3f} | Acc: {metrics['accuracy']:.1%}")
+            st.caption(f"AUC: {metrics['auc']:.3f}")
     
     st.markdown("---")
     st.markdown("### 📌 Progression")
@@ -1025,9 +925,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("""
     <div style="font-size:0.75rem; text-align:center; color:rgba(255,255,255,0.6);">
-        <p>📚 Sources : claredang • nagatejakachapuram<br>
-        yashmahes • Shehab-Hegab • prasanna24062004<br>
-        MASANAMUTHU22 • Ankita-M-24 • Anvesh-3</p>
+        <p>📚 Modèles: Logistic Regression, SVC,<br>
+        Decision Tree, KNN, ANN, CNN</p>
         <p>© 2024 — Outil d'aide à la décision</p>
     </div>
     """, unsafe_allow_html=True)
@@ -1046,7 +945,7 @@ st.markdown(f"""
     <div style="margin-top: 1rem;">
         <span class="badge badge-purple">🤖 {n_models} modèles</span>
         <span class="badge badge-green">🧠 ANN + CNN</span>
-        <span class="badge badge-orange">🏆 Sélection automatique</span>
+        <span class="badge badge-orange">🏆 Sélection auto</span>
         <span class="badge badge-pink">📈 Learning Curves</span>
     </div>
 </div>
@@ -1107,7 +1006,7 @@ elif st.session_state.page == 2:
     col1, col2 = st.columns(2)
     
     with col1:
-        nom = st.text_input("📝 Prénom de l'enfant", placeholder="ex: Adam, Sara, Lucas...")
+        nom = st.text_input("📝 Prénom de l'enfant", placeholder="ex: Adam, Sara...")
         age = st.number_input("🎂 Âge (années)", min_value=2, max_value=60, value=5)
     
     with col2:
@@ -1163,7 +1062,7 @@ elif st.session_state.page == 3:
     <div class="card fade-in">
         <h3>📋 Questionnaire d'évaluation</h3>
         <p><strong>{infos.get('nom', '')}</strong> • Âge : {infos.get('age', '')} ans</p>
-        <p><small>Basé sur les 10 questions standard du screening ASD (AQ-10)</small></p>
+        <p><small>10 questions standard du screening ASD (AQ-10)</small></p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1171,9 +1070,9 @@ elif st.session_state.page == 3:
         ("A1", "😊", "Difficultés à comprendre les expressions faciales ?",
          "Ne comprend pas quand quelqu'un est triste, content ou fâché"),
         ("A2", "💬", "Difficultés à maintenir une conversation ?",
-         "Ne sait pas quand parler, quand s'arrêter, change de sujet brusquement"),
+         "Ne sait pas quand parler, quand s'arrêter, change de sujet"),
         ("A3", "🔄", "Comportements répétitifs ?",
-         "Se balance, tourne, tape des mains, répète les mêmes mots"),
+         "Se balance, tourne, tape des mains, répète les mots"),
         ("A4", "🎯", "Intérêts très spécifiques et intenses ?",
          "Toujours le même sujet, collectionne des objets inhabituels"),
         ("A5", "😐", "Semble distant ou sans émotion ?",
@@ -1187,7 +1086,7 @@ elif st.session_state.page == 3:
         ("A9", "👀", "Évite le contact visuel ?",
          "Ne regarde pas dans les yeux, détourne le regard"),
         ("A10", "📅", "Très attaché à ses routines ?",
-         "Se fâche quand on change ses habitudes ou son environnement"),
+         "Se fâche quand on change ses habitudes"),
     ]
     
     for idx, (qid, icon, question, detail) in enumerate(QUESTIONS, 1):
@@ -1222,13 +1121,9 @@ elif st.session_state.page == 3:
         st.markdown(f"""
         <div style="background:linear-gradient(135deg,#667eea,#764ba2);
                     border-radius:20px; padding:1rem; text-align:center; margin:1rem 0;">
-            <span style="color:white; font-size:1.2rem;">
-                📊 Progression : {total_reponses}/10
-            </span>
+            <span style="color:white; font-size:1.2rem;">📊 Progression : {total_reponses}/10</span>
             <br>
-            <span style="color:white; font-size:2rem; font-weight:bold;">
-                Score : {score}/{total_reponses}
-            </span>
+            <span style="color:white; font-size:2rem; font-weight:bold;">Score : {score}/{total_reponses}</span>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1249,7 +1144,7 @@ elif st.session_state.page == 3:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
-# PAGE 4 — RÉSULTATS COMPLETS AVEC TOUTES LES COURBES
+# PAGE 4 — RÉSULTATS COMPLETS
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 elif st.session_state.page == 4:
@@ -1265,11 +1160,9 @@ elif st.session_state.page == 4:
     
     total_score = sum(reponses.values())
     
-    # Préparer les données du patient
     n_features = st.session_state.scaler.n_features_in_
     patient_scaled = preparer_patient(reponses, infos, st.session_state.scaler, n_features)
     
-    # Prédictions de tous les modèles
     all_predictions = {}
     all_probas = {}
     
@@ -1294,16 +1187,14 @@ elif st.session_state.page == 4:
             all_predictions[name] = pred
             all_probas[name] = proba
     
-    # Résultat du meilleur modèle
     best_pred = all_predictions[best_name]
     best_proba = all_probas[best_name]
     
-    # Vote majoritaire
     votes_positive = sum(all_predictions.values())
     consensus = votes_positive / len(all_predictions)
     consensus_pred = int(consensus > 0.5)
     
-    # AFFICHAGE DU RÉSULTAT PRINCIPAL
+    # RÉSULTAT PRINCIPAL
     st.markdown(f'<div class="winner-box fade-in">🏆 Décision finale — {best_name}</div>', 
                 unsafe_allow_html=True)
     
@@ -1312,9 +1203,7 @@ elif st.session_state.page == 4:
         <div class="result-card" style="background:linear-gradient(135deg,#f093fb,#f5576c);">
             <span style="font-size:4rem;">🚨</span>
             <h1 style="color:white;">Risque élevé détecté</h1>
-            <p style="color:white; font-size:1.2rem;">
-                Une évaluation clinique approfondie est recommandée
-            </p>
+            <p style="color:white;">Une évaluation clinique approfondie est recommandée</p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -1322,32 +1211,29 @@ elif st.session_state.page == 4:
         <div class="result-card" style="background:linear-gradient(135deg,#84fab0,#8fd3f4);">
             <span style="font-size:4rem;">✅</span>
             <h1 style="color:#2c3e50;">Risque faible</h1>
-            <p style="color:#2c3e50; font-size:1.2rem;">
-                Le développement semble dans la norme
-            </p>
+            <p style="color:#2c3e50;">Le développement semble dans la norme</p>
         </div>
         """, unsafe_allow_html=True)
     
-    # Métriques principales
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("📊 Score questionnaire", f"{total_score}/10")
-    col2.metric("🤖 Probabilité (meilleur)", f"{best_proba:.1%}")
-    col3.metric("🎯 Consensus des modèles", f"{consensus:.0%}")
-    col4.metric("📈 AUC meilleur modèle", f"{results[best_name]['auc']:.3f}")
+    col2.metric("🤖 Probabilité", f"{best_proba:.1%}")
+    col3.metric("🎯 Consensus", f"{consensus:.0%}")
+    col4.metric("📈 AUC", f"{results[best_name]['auc']:.3f}")
     
     st.progress(best_proba)
     st.markdown("---")
     
-    # VOTE DE TOUS LES MODÈLES
+    # VOTE DES MODÈLES
     st.subheader("🗳️ Vote des modèles")
     
-    cols = st.columns(4)
+    cols = st.columns(3)
     for idx, (name, proba) in enumerate(sorted(all_probas.items(), key=lambda x: x[1], reverse=True)):
         pred = all_predictions[name]
         color = "#ffcccc" if pred else "#ccffcc"
         medal = "🏆 " if name == best_name else ""
         
-        with cols[idx % 4]:
+        with cols[idx % 3]:
             st.markdown(f"""
             <div style="background:{color}; border-radius:12px; padding:0.8rem; 
                         margin:0.4rem; text-align:center;">
@@ -1361,16 +1247,13 @@ elif st.session_state.page == 4:
     <div style="background:linear-gradient(135deg,#667eea,#764ba2);
                 border-radius:20px; padding:1.2rem; text-align:center; margin:1rem 0;">
         <h3 style="color:white;">🗳️ {votes_positive}/{len(all_predictions)} modèles détectent un risque</h3>
-        <p style="color:rgba(255,255,255,0.9);">
-            {'⚠️ Une consultation avec un spécialiste est recommandée' if consensus_pred else '✅ Pas de signes d\'alerte majeurs'}
-        </p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # SECTION 1: COMPARAISON DE TOUS LES MODÈLES
-    st.subheader("📊 Comparaison des performances de tous les modèles")
+    # COMPARAISON DES MODÈLES
+    st.subheader("📊 Comparaison des performances")
     
     with st.container():
         st.markdown('<div class="plot-container">', unsafe_allow_html=True)
@@ -1379,8 +1262,7 @@ elif st.session_state.page == 4:
         plt.close()
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Tableau des métriques
-    with st.expander("📋 Voir le tableau détaillé des métriques"):
+    with st.expander("📋 Voir le tableau détaillé"):
         metrics_data = []
         for name, res in results.items():
             metrics_data.append({
@@ -1391,14 +1273,12 @@ elif st.session_state.page == 4:
                 "F1-Score": f"{res['f1']:.3f}",
                 "AUC": f"{res['auc']:.3f}"
             })
-        
-        df_metrics = pd.DataFrame(metrics_data)
-        st.dataframe(df_metrics, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(metrics_data), use_container_width=True, hide_index=True)
     
     st.markdown("---")
     
-    # SECTION 2: COURBES ROC ET PR DE TOUS LES MODÈLES
-    st.subheader("📈 Courbes d'évaluation de tous les modèles")
+    # COURBES ROC ET PR
+    st.subheader("📈 Courbes d'évaluation")
     
     col_roc, col_pr = st.columns(2)
     
@@ -1420,62 +1300,35 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # SECTION 3: COURBE D'APPRENTISSAGE DU MEILLEUR MODÈLE
+    # MATRICE DE CONFUSION
     if best_name not in ["🧠 ANN", "📡 CNN"]:
-        st.subheader("📉 Courbe d'apprentissage du meilleur modèle")
+        st.subheader("📊 Évaluation du meilleur modèle")
         
-        with st.container():
+        col_cm, col_fi = st.columns(2)
+        
+        with col_cm:
             st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-            X_combined = np.vstack([st.session_state.X_train, st.session_state.X_test])
-            y_combined = np.concatenate([st.session_state.y_train, st.session_state.y_test])
-            fig_lc = plot_learning_curve(best_model, X_combined, y_combined, best_name)
-            st.pyplot(fig_lc)
+            st.markdown("#### Matrice de confusion")
+            fig_cm = plot_confusion_matrix(st.session_state.y_test, st.session_state.y_pred, best_name)
+            st.pyplot(fig_cm)
             plt.close()
             st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("---")
-    
-    # SECTION 4: MATRICE DE CONFUSION
-    st.subheader("📊 Évaluation détaillée du meilleur modèle")
-    
-    col_cm, col_cr = st.columns(2)
-    
-    with col_cm:
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-        st.markdown("#### Matrice de confusion")
-        fig_cm = plot_confusion_matrix(
-            st.session_state.y_test, 
-            st.session_state.y_pred,
-            best_name
-        )
-        st.pyplot(fig_cm)
-        plt.close()
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col_cr:
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-        st.markdown("#### Rapport de classification")
         
-        report = classification_report(
-            st.session_state.y_test,
-            st.session_state.y_pred,
-            target_names=["Non-ASD", "ASD"],
-            output_dict=True
-        )
-        
-        df_report = pd.DataFrame(report).transpose().round(3)
-        st.dataframe(df_report, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with col_fi:
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+            fig_fi = plot_feature_importance(best_model, st.session_state.col_names, best_name)
+            if fig_fi:
+                st.pyplot(fig_fi)
+                plt.close()
+            st.markdown('</div>')
     
-    st.markdown("---")
-    
-    # SECTION 5: HISTORIQUE DEEP LEARNING
+    # HISTORIQUE DEEP LEARNING
     if TF_OK:
         dl_models = [(name, res) for name, res in results.items() 
                      if name in ["🧠 ANN", "📡 CNN"] and res["history"] is not None]
         
         if dl_models:
-            st.subheader("🧠 Historique d'entraînement - Deep Learning")
-            
+            st.subheader("🧠 Historique Deep Learning")
             dl_cols = st.columns(len(dl_models))
             for idx, (name, res) in enumerate(dl_models):
                 with dl_cols[idx]:
@@ -1486,82 +1339,52 @@ elif st.session_state.page == 4:
                         st.pyplot(fig_hist)
                         plt.close()
                     st.markdown('</div>')
-            
-            st.markdown("---")
-    
-    # SECTION 6: IMPORTANCE DES CARACTÉRISTIQUES
-    if best_name not in ["🧠 ANN", "📡 CNN"]:
-        st.subheader("🎯 Importance des caractéristiques")
-        
-        with st.container():
-            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-            fig_fi = plot_feature_importance(
-                best_model, 
-                st.session_state.col_names,
-                best_name
-            )
-            if fig_fi:
-                st.pyplot(fig_fi)
-                plt.close()
-            st.markdown('</div>')
-        
-        st.markdown("---")
-    
-    # RECOMMANDATIONS PERSONNALISÉES
-    st.subheader("💡 Recommandations personnalisées")
-    
-    role = st.session_state.role
-    
-    if best_pred == 1:
-        if role == "parent":
-            recommendations = """
-            • 👶 **Consultez rapidement un pédiatre** ou neuropédiatre spécialisé
-            • 📞 **Contactez un centre de référence** pour l'autisme (CRA)
-            • 📝 **Notez les comportements observés** pour le prochain rendez-vous
-            • 📚 **Renseignez-vous** sur les interventions précoces
-            """
-        else:
-            recommendations = """
-            • 🔬 **Réalisez une évaluation clinique approfondie** (ADOS-2, CARS)
-            • 🏥 **Orientez vers un centre spécialisé** si nécessaire
-            • 📊 **Prescrivez des examens complémentaires**
-            • 📝 **Documentez l'historique** du développement
-            """
-        
-        st.markdown(f"""
-        <div style="background:#fff3cd; border-left:4px solid #ffc107;
-                    border-radius:10px; padding:1rem; margin:1rem 0;">
-            <strong>⚠️ Recommandations suite au risque élevé détecté :</strong><br>
-            {recommendations}
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        if role == "parent":
-            recommendations = """
-            • ✅ **Continuez à surveiller** le développement de votre enfant
-            • 📅 **Maintenez les visites régulières** chez le pédiatre
-            • 🎨 **Encouragez les activités sociales** et l'interaction
-            """
-        else:
-            recommendations = """
-            • ✅ **Rassurez les parents**, le développement semble dans la norme
-            • 📅 **Continuez le suivi régulier** selon le carnet de santé
-            • 📊 **Surveillez les étapes clés** du développement
-            """
-        
-        st.markdown(f"""
-        <div style="background:#d4edda; border-left:4px solid #28a745;
-                    border-radius:10px; padding:1rem; margin:1rem 0;">
-            <strong>✅ Recommandations suite au risque faible :</strong><br>
-            {recommendations}
-        </div>
-        """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # BOUTON NOUVELLE ÉVALUATION
-    _, col_reset, _ = st.columns([1, 2, 1])
+    # RECOMMANDATIONS
+    st.subheader("💡 Recommandations")
     
+    if best_pred == 1:
+        if st.session_state.role == "parent":
+            st.markdown("""
+            <div style="background:#fff3cd; border-left:4px solid #ffc107; border-radius:10px; padding:1rem;">
+                <strong>⚠️ Recommandations :</strong><br>
+                • Consultez rapidement un pédiatre<br>
+                • Contactez un centre de référence<br>
+                • Notez les comportements observés
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background:#fff3cd; border-left:4px solid #ffc107; border-radius:10px; padding:1rem;">
+                <strong>⚠️ Recommandations :</strong><br>
+                • Réalisez une évaluation clinique approfondie<br>
+                • Orientez vers un centre spécialisé<br>
+                • Documentez l'historique du patient
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        if st.session_state.role == "parent":
+            st.markdown("""
+            <div style="background:#d4edda; border-left:4px solid #28a745; border-radius:10px; padding:1rem;">
+                <strong>✅ Recommandations :</strong><br>
+                • Continuez à surveiller le développement<br>
+                • Maintenez les visites régulières chez le pédiatre
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background:#d4edda; border-left:4px solid #28a745; border-radius:10px; padding:1rem;">
+                <strong>✅ Recommandations :</strong><br>
+                • Rassurez les parents<br>
+                • Continuez le suivi régulier
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    _, col_reset, _ = st.columns([1, 2, 1])
     with col_reset:
         if st.button("🔄 Nouvelle évaluation", type="primary", use_container_width=True):
             for k in ["page", "reponses", "infos_enfant", "role"]:
@@ -1576,9 +1399,7 @@ elif st.session_state.page == 4:
 st.markdown("""
 <div style="text-align:center; padding:2rem; color:rgba(255,255,255,0.6);">
     <hr style="border-color:rgba(255,255,255,0.2);">
-    <p>🧠 <strong>NeuroSense</strong> — Fusion des meilleurs projets GitHub</p>
-    <p style="font-size:0.7rem;">
-        ⚠️ Cet outil est une aide à la décision. Consultez toujours un professionnel de santé.
-    </p>
+    <p>🧠 <strong>NeuroSense</strong> — Détection précoce de l'autisme</p>
+    <p style="font-size:0.7rem;">⚠️ Outil d'aide à la décision - Consultez toujours un professionnel de santé</p>
 </div>
 """, unsafe_allow_html=True)
