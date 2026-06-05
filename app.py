@@ -3,8 +3,8 @@
 ╔══════════════════════════════════════════════════════════════════════════════════════╗
 ║                         🧠 NeuroSense — Détection Précoce de l'Autisme               ║
 ║                                                                                      ║
-║  ⚡ 6 MODÈLES UNIQUEMENT (Logistic Regression, SVC, Decision Tree, KNN, ANN, CNN)   ║
-║  📈 TOUTES LES COURBES : ROC, Learning Curves, Historique Deep Learning             ║
+║  ⚡ 4 MODÈLES UNIQUEMENT (Logistic Regression, SVC, Decision Tree, KNN)             ║
+║  📈 TOUTES LES COURBES : ROC, Learning Curves                                       ║
 ║  📊 TOUTES LES MÉTRIQUES : Accuracy, Precision, Recall, F1, AUC, Matrice confusion  ║
 ║  🗳️ SYSTÈME DE VOTE : Décision collective de tous les modèles                       ║
 ╚══════════════════════════════════════════════════════════════════════════════════════╝
@@ -18,47 +18,9 @@ import seaborn as sns
 import warnings
 import time
 import os
-import subprocess
-import sys
 
 warnings.filterwarnings("ignore")
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
-# ──────────────────────────────────────────────────────────────────────────────────────
-# INSTALLATION AUTOMATIQUE DE TENSORFLOW SI NÉCESSAIRE
-# ──────────────────────────────────────────────────────────────────────────────────────
-def install_tensorflow():
-    """Installe TensorFlow automatiquement s'il n'est pas présent."""
-    try:
-        import tensorflow as tf
-        return True
-    except ImportError:
-        st.warning("📦 Installation de TensorFlow en cours... Veuillez patienter.")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "tensorflow", "-q"])
-            import tensorflow as tf
-            st.success("✅ TensorFlow installé avec succès !")
-            return True
-        except Exception as e:
-            st.error(f"❌ Impossible d'installer TensorFlow automatiquement: {e}")
-            st.info("💡 Veuillez installer TensorFlow manuellement: pip install tensorflow")
-            return False
-
-# Tentative d'installation de TensorFlow
-TF_OK = install_tensorflow()
-
-if TF_OK:
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import (
-        Dense, Dropout, Conv1D, MaxPooling1D, Flatten,
-        GlobalAveragePooling1D, BatchNormalization, Input
-    )
-    from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-    from tensorflow.keras.optimizers import Adam
-    st.success("✅ TensorFlow chargé avec succès ! ANN et CNN sont actifs.")
-else:
-    st.warning("⚠️ TensorFlow non disponible. Seuls les modèles classiques seront utilisés.")
 
 # ──────────────────────────────────────────────────────────────────────────────────────
 # IMPORTS SCIKIT-LEARN
@@ -374,7 +336,7 @@ def manual_oversample(X, y, random_state=42):
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 def modeles_classiques():
-    """Dictionnaire des 4 modèles classiques (sans RF, XGBoost, GB, NB)."""
+    """Dictionnaire des 4 modèles classiques."""
     return {
         "📐 Logistic Regression": LogisticRegression(
             C=1.0, max_iter=1000, solver="lbfgs", random_state=42
@@ -389,109 +351,6 @@ def modeles_classiques():
             n_neighbors=7, weights="distance", metric="minkowski", p=2
         )
     }
-
-
-# ═══════════════════════════════════════════════════════════════════════════════════════
-# MODÈLES DEEP LEARNING (ANN + CNN)
-# ═══════════════════════════════════════════════════════════════════════════════════════
-
-def build_ann(input_dim: int):
-    """Construction du réseau de neurones artificiels (ANN)."""
-    model = Sequential([
-        Dense(256, activation="relu", input_shape=(input_dim,)),
-        BatchNormalization(),
-        Dropout(0.3),
-        
-        Dense(128, activation="relu"),
-        BatchNormalization(),
-        Dropout(0.2),
-        
-        Dense(64, activation="relu"),
-        BatchNormalization(),
-        Dropout(0.2),
-        
-        Dense(32, activation="relu"),
-        Dropout(0.1),
-        
-        Dense(1, activation="sigmoid")
-    ])
-    
-    model.compile(
-        optimizer=Adam(learning_rate=0.001),
-        loss="binary_crossentropy",
-        metrics=["accuracy", tf.keras.metrics.AUC(name="auc")]
-    )
-    return model
-
-
-def build_cnn(input_dim: int):
-    """Construction du réseau de neurones convolutif (CNN 1D)."""
-    model = Sequential([
-        Input(shape=(input_dim, 1)),
-        
-        Conv1D(64, kernel_size=3, activation="relu", padding="same"),
-        BatchNormalization(),
-        MaxPooling1D(pool_size=2),
-        
-        Conv1D(128, kernel_size=3, activation="relu", padding="same"),
-        BatchNormalization(),
-        MaxPooling1D(pool_size=2),
-        
-        Conv1D(64, kernel_size=3, activation="relu", padding="same"),
-        GlobalAveragePooling1D(),
-        
-        Dense(64, activation="relu"),
-        Dropout(0.3),
-        
-        Dense(32, activation="relu"),
-        Dropout(0.2),
-        
-        Dense(1, activation="sigmoid")
-    ])
-    
-    model.compile(
-        optimizer=Adam(learning_rate=0.001),
-        loss="binary_crossentropy",
-        metrics=["accuracy", tf.keras.metrics.AUC(name="auc")]
-    )
-    return model
-
-
-def entrainer_deep(X_tr, X_te, y_tr, y_te, kind="ANN"):
-    """Entraîne un modèle Deep Learning et retourne les résultats."""
-    if not TF_OK:
-        return None, None, None, 0, 0, None
-    
-    es = EarlyStopping(
-        monitor="val_loss", patience=15, restore_best_weights=True, verbose=0
-    )
-    reduce_lr = ReduceLROnPlateau(
-        monitor="val_loss", factor=0.5, patience=7, min_lr=0.00001, verbose=0
-    )
-    
-    if kind == "ANN":
-        model = build_ann(X_tr.shape[1])
-        Xtr, Xte = X_tr, X_te
-    else:
-        model = build_cnn(X_tr.shape[1])
-        Xtr = X_tr.reshape(-1, X_tr.shape[1], 1)
-        Xte = X_te.reshape(-1, X_te.shape[1], 1)
-    
-    history = model.fit(
-        Xtr, y_tr,
-        epochs=100,
-        batch_size=32,
-        validation_split=0.15,
-        callbacks=[es, reduce_lr],
-        verbose=0
-    )
-    
-    y_proba = model.predict(Xte, verbose=0).ravel()
-    y_pred = (y_proba > 0.5).astype(int)
-    acc = accuracy_score(y_te, y_pred)
-    roc = roc_auc_score(y_te, y_proba)
-    
-    return model, y_pred, y_proba, acc, roc, history
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -516,7 +375,7 @@ def plot_roc_curves(results, y_test, best_name):
     ax.set_xlabel("Taux de faux positifs", fontsize=12)
     ax.set_ylabel("Taux de vrais positifs", fontsize=12)
     ax.set_title("📈 Courbes ROC de tous les modèles", fontsize=14, fontweight="bold")
-    ax.legend(loc="lower right", fontsize=8)
+    ax.legend(loc="lower right", fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_xlim([-0.02, 1.02])
     ax.set_ylim([-0.02, 1.02])
@@ -542,7 +401,7 @@ def plot_pr_curves(results, y_test, best_name):
     ax.set_xlabel("Rappel (Recall)", fontsize=12)
     ax.set_ylabel("Précision (Precision)", fontsize=12)
     ax.set_title("📊 Courbes Précision-Rappel", fontsize=14, fontweight="bold")
-    ax.legend(loc="lower left", fontsize=8)
+    ax.legend(loc="lower left", fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_xlim([-0.02, 1.02])
     ax.set_ylim([-0.02, 1.02])
@@ -665,33 +524,6 @@ def plot_model_comparison(results):
     return fig
 
 
-def plot_training_history(history, model_name):
-    """Dessine l'historique d'entraînement d'un modèle Deep Learning."""
-    if history is None:
-        return None
-    
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    
-    axes[0].plot(history.history["accuracy"], "o-", color="#667eea", label="Train", lw=2)
-    axes[0].plot(history.history["val_accuracy"], "s-", color="#f5576c", label="Validation", lw=2)
-    axes[0].set_xlabel("Époque", fontsize=11)
-    axes[0].set_ylabel("Accuracy", fontsize=11)
-    axes[0].set_title(f"{model_name} — Accuracy", fontsize=12, fontweight="bold")
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-    
-    axes[1].plot(history.history["loss"], "o-", color="#667eea", label="Train", lw=2)
-    axes[1].plot(history.history["val_loss"], "s-", color="#f5576c", label="Validation", lw=2)
-    axes[1].set_xlabel("Époque", fontsize=11)
-    axes[1].set_ylabel("Loss", fontsize=11)
-    axes[1].set_title(f"{model_name} — Loss", fontsize=12, fontweight="bold")
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
-    
-    fig.tight_layout()
-    return fig
-
-
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # PIPELINE D'ENTRAÎNEMENT COMPLET
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -721,7 +553,7 @@ def pipeline_complet(df_raw: pd.DataFrame):
     status_text = st.empty()
     
     all_models = modeles_classiques()
-    n_models = len(all_models) + (2 if TF_OK else 0)
+    n_models = len(all_models)
     step = 0
     
     # Modèles classiques
@@ -752,34 +584,6 @@ def pipeline_complet(df_raw: pd.DataFrame):
         
         step += 1
         progress_bar.progress(step / n_models)
-    
-    # Deep Learning
-    if TF_OK:
-        status_text.text("🔄 Entraînement: 🧠 ANN")
-        ann, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "ANN")
-        if ann is not None:
-            results["🧠 ANN"] = {
-                "modele": ann, "accuracy": acc, "auc": roc,
-                "y_pred": yp, "y_proba": yprob, "history": hist,
-                "precision": precision_score(y_te, yp, zero_division=0),
-                "recall": recall_score(y_te, yp, zero_division=0),
-                "f1": f1_score(y_te, yp, zero_division=0)
-            }
-            step += 1
-            progress_bar.progress(step / n_models)
-        
-        status_text.text("🔄 Entraînement: 📡 CNN")
-        cnn, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "CNN")
-        if cnn is not None:
-            results["📡 CNN"] = {
-                "modele": cnn, "accuracy": acc, "auc": roc,
-                "y_pred": yp, "y_proba": yprob, "history": hist,
-                "precision": precision_score(y_te, yp, zero_division=0),
-                "recall": recall_score(y_te, yp, zero_division=0),
-                "f1": f1_score(y_te, yp, zero_division=0)
-            }
-            step += 1
-            progress_bar.progress(min(1.0, step / n_models))
     
     status_text.text("✅ Entraînement terminé !")
     time.sleep(1)
@@ -926,7 +730,7 @@ with st.sidebar:
     st.markdown("""
     <div style="font-size:0.75rem; text-align:center; color:rgba(255,255,255,0.6);">
         <p>📚 Modèles: Logistic Regression, SVC,<br>
-        Decision Tree, KNN, ANN, CNN</p>
+        Decision Tree, KNN</p>
         <p>© 2024 — Outil d'aide à la décision</p>
     </div>
     """, unsafe_allow_html=True)
@@ -944,7 +748,7 @@ st.markdown(f"""
     <p>Détection précoce des Troubles du Spectre Autistique par Intelligence Artificielle</p>
     <div style="margin-top: 1rem;">
         <span class="badge badge-purple">🤖 {n_models} modèles</span>
-        <span class="badge badge-green">🧠 ANN + CNN</span>
+        <span class="badge badge-green">📊 4 modèles classiques</span>
         <span class="badge badge-orange">🏆 Sélection auto</span>
         <span class="badge badge-pink">📈 Learning Curves</span>
     </div>
@@ -1067,29 +871,19 @@ elif st.session_state.page == 3:
     """, unsafe_allow_html=True)
     
     QUESTIONS = [
-        ("A1", "😊", "Difficultés à comprendre les expressions faciales ?",
-         "Ne comprend pas quand quelqu'un est triste, content ou fâché"),
-        ("A2", "💬", "Difficultés à maintenir une conversation ?",
-         "Ne sait pas quand parler, quand s'arrêter, change de sujet"),
-        ("A3", "🔄", "Comportements répétitifs ?",
-         "Se balance, tourne, tape des mains, répète les mots"),
-        ("A4", "🎯", "Intérêts très spécifiques et intenses ?",
-         "Toujours le même sujet, collectionne des objets inhabituels"),
-        ("A5", "😐", "Semble distant ou sans émotion ?",
-         "Ne réagit pas quand on l'appelle, semble dans sa bulle"),
-        ("A6", "🔊", "Sensibilité aux bruits ou textures ?",
-         "N'aime pas l'aspirateur, les étiquettes, certaines lumières"),
-        ("A7", "🎮", "Préfère jouer seul ?",
-         "Ne cherche pas à faire des amis, joue en solitaire"),
-        ("A8", "📖", "Langage très littéral ?",
-         "Ne comprend pas les blagues, l'ironie ou les métaphores"),
-        ("A9", "👀", "Évite le contact visuel ?",
-         "Ne regarde pas dans les yeux, détourne le regard"),
-        ("A10", "📅", "Très attaché à ses routines ?",
-         "Se fâche quand on change ses habitudes"),
+        ("A1", "😊", "Difficultés à comprendre les expressions faciales ?"),
+        ("A2", "💬", "Difficultés à maintenir une conversation ?"),
+        ("A3", "🔄", "Comportements répétitifs ?"),
+        ("A4", "🎯", "Intérêts très spécifiques et intenses ?"),
+        ("A5", "😐", "Semble distant ou sans émotion ?"),
+        ("A6", "🔊", "Sensibilité aux bruits ou textures ?"),
+        ("A7", "🎮", "Préfère jouer seul ?"),
+        ("A8", "📖", "Langage très littéral ?"),
+        ("A9", "👀", "Évite le contact visuel ?"),
+        ("A10", "📅", "Très attaché à ses routines ?"),
     ]
     
-    for idx, (qid, icon, question, detail) in enumerate(QUESTIONS, 1):
+    for idx, (qid, icon, question) in enumerate(QUESTIONS, 1):
         col_icon, col_q = st.columns([1, 5])
         
         with col_icon:
@@ -1103,7 +897,6 @@ elif st.session_state.page == 3:
         
         with col_q:
             st.markdown(f"**Question {idx}/10** — {question}")
-            st.caption(f"💡 {detail}")
             rep = st.radio("", [0, 1],
                           format_func=lambda x: "❌ Non" if x == 0 else "✅ Oui",
                           key=f"q_{qid}",
@@ -1170,15 +963,7 @@ elif st.session_state.page == 4:
         for name, res in results.items():
             clf = res["modele"]
             try:
-                if name in ["🧠 ANN", "📡 CNN"] and TF_OK:
-                    if name == "📡 CNN":
-                        X_in = patient_scaled.reshape(-1, n_features, 1)
-                    else:
-                        X_in = patient_scaled
-                    proba = float(clf.predict(X_in, verbose=0).ravel()[0])
-                else:
-                    proba = float(clf.predict_proba(patient_scaled)[0][1])
-                
+                proba = float(clf.predict_proba(patient_scaled)[0][1])
                 pred = int(proba > 0.5)
             except Exception:
                 proba = 0.5
@@ -1227,13 +1012,13 @@ elif st.session_state.page == 4:
     # VOTE DES MODÈLES
     st.subheader("🗳️ Vote des modèles")
     
-    cols = st.columns(3)
+    cols = st.columns(2)
     for idx, (name, proba) in enumerate(sorted(all_probas.items(), key=lambda x: x[1], reverse=True)):
         pred = all_predictions[name]
         color = "#ffcccc" if pred else "#ccffcc"
         medal = "🏆 " if name == best_name else ""
         
-        with cols[idx % 3]:
+        with cols[idx % 2]:
             st.markdown(f"""
             <div style="background:{color}; border-radius:12px; padding:0.8rem; 
                         margin:0.4rem; text-align:center;">
@@ -1300,45 +1085,42 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # MATRICE DE CONFUSION
-    if best_name not in ["🧠 ANN", "📡 CNN"]:
-        st.subheader("📊 Évaluation du meilleur modèle")
-        
-        col_cm, col_fi = st.columns(2)
-        
-        with col_cm:
-            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-            st.markdown("#### Matrice de confusion")
-            fig_cm = plot_confusion_matrix(st.session_state.y_test, st.session_state.y_pred, best_name)
-            st.pyplot(fig_cm)
-            plt.close()
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col_fi:
-            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-            fig_fi = plot_feature_importance(best_model, st.session_state.col_names, best_name)
-            if fig_fi:
-                st.pyplot(fig_fi)
-                plt.close()
-            st.markdown('</div>')
+    # MATRICE DE CONFUSION ET FEATURE IMPORTANCE
+    st.subheader("📊 Évaluation du meilleur modèle")
     
-    # HISTORIQUE DEEP LEARNING
-    if TF_OK:
-        dl_models = [(name, res) for name, res in results.items() 
-                     if name in ["🧠 ANN", "📡 CNN"] and res["history"] is not None]
-        
-        if dl_models:
-            st.subheader("🧠 Historique Deep Learning")
-            dl_cols = st.columns(len(dl_models))
-            for idx, (name, res) in enumerate(dl_models):
-                with dl_cols[idx]:
-                    st.markdown(f'<div class="plot-container">', unsafe_allow_html=True)
-                    st.markdown(f"#### {name}")
-                    fig_hist = plot_training_history(res["history"], name)
-                    if fig_hist:
-                        st.pyplot(fig_hist)
-                        plt.close()
-                    st.markdown('</div>')
+    col_cm, col_fi = st.columns(2)
+    
+    with col_cm:
+        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+        st.markdown("#### Matrice de confusion")
+        fig_cm = plot_confusion_matrix(st.session_state.y_test, st.session_state.y_pred, best_name)
+        st.pyplot(fig_cm)
+        plt.close()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col_fi:
+        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+        fig_fi = plot_feature_importance(best_model, st.session_state.col_names, best_name)
+        if fig_fi:
+            st.pyplot(fig_fi)
+            plt.close()
+        else:
+            st.info("Importance des caractéristiques non disponible pour ce modèle")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # COURBE D'APPRENTISSAGE
+    st.subheader("📉 Courbe d'apprentissage")
+    
+    with st.container():
+        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+        X_combined = np.vstack([st.session_state.X_train, st.session_state.X_test])
+        y_combined = np.concatenate([st.session_state.y_train, st.session_state.y_test])
+        fig_lc = plot_learning_curve(best_model, X_combined, y_combined, best_name)
+        st.pyplot(fig_lc)
+        plt.close()
+        st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown("---")
     
