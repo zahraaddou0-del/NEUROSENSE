@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════════════════════════════════════════════════════╗
@@ -42,7 +41,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import (
     accuracy_score, classification_report, confusion_matrix,
     roc_curve, roc_auc_score, precision_score, recall_score, f1_score,
-    ConfusionMatrixDisplay, precision_recall_curve, average_precision_score
+    average_precision_score, precision_recall_curve
 )
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -51,7 +50,113 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
-from imblearn.over_sampling import RandomOverSampler, SMOTE
+
+# ──────────────────────────────────────────────────────────────────────────────────────
+# OVERSAMPLING MANUEL (alternative à imblearn pour éviter les conflits de version)
+# ──────────────────────────────────────────────────────────────────────────────────────
+def manual_oversample(X, y, random_state=42):
+    """
+    Équilibrage manuel des classes - Alternative à RandomOverSampler
+    pour éviter les problèmes de compatibilité avec Python 3.14
+    """
+    np.random.seed(random_state)
+    
+    # Convertir en array si nécessaire
+    X = np.array(X)
+    y = np.array(y)
+    
+    # Trouver les classes uniques
+    unique_classes = np.unique(y)
+    class_counts = {c: np.sum(y == c) for c in unique_classes}
+    max_count = max(class_counts.values())
+    
+    X_resampled = []
+    y_resampled = []
+    
+    for cls in unique_classes:
+        X_cls = X[y == cls]
+        y_cls = y[y == cls]
+        current_count = len(X_cls)
+        
+        if current_count < max_count:
+            # Besoin d'augmenter
+            indices = np.random.choice(current_count, max_count - current_count, replace=True)
+            X_extra = X_cls[indices]
+            y_extra = y_cls[indices]
+            X_resampled.extend(X_cls)
+            X_resampled.extend(X_extra)
+            y_resampled.extend(y_cls)
+            y_resampled.extend(y_extra)
+        else:
+            X_resampled.extend(X_cls)
+            y_resampled.extend(y_cls)
+    
+    return np.array(X_resampled), np.array(y_resampled)
+
+
+def manual_smote_simple(X, y, random_state=42, k=5):
+    """
+    Version simplifiée de SMOTE pour l'équilibrage
+    Alternative à imblearn pour éviter les problèmes de compatibilité
+    """
+    np.random.seed(random_state)
+    
+    X = np.array(X)
+    y = np.array(y)
+    
+    # Identifier la classe minoritaire
+    unique_classes = np.unique(y)
+    class_counts = {c: np.sum(y == c) for c in unique_classes}
+    majority_class = max(class_counts, key=class_counts.get)
+    minority_class = min(class_counts, key=class_counts.get)
+    
+    # Si les classes sont déjà équilibrées
+    if class_counts[majority_class] <= class_counts[minority_class] * 1.1:
+        return X, y
+    
+    n_to_generate = class_counts[majority_class] - class_counts[minority_class]
+    
+    # Extraire les échantillons de la classe minoritaire
+    X_minority = X[y == minority_class]
+    n_minority = len(X_minority)
+    
+    if n_minority < 2:
+        return manual_oversample(X, y, random_state)
+    
+    synthetic_samples = []
+    
+    for _ in range(n_to_generate):
+        # Choisir un échantillon aléatoire de la classe minoritaire
+        idx = np.random.randint(0, n_minority)
+        sample = X_minority[idx]
+        
+        # Trouver les k plus proches voisins
+        distances = np.sqrt(np.sum((X_minority - sample) ** 2, axis=1))
+        nearest_indices = np.argsort(distances)[1:min(k+1, n_minority)]
+        
+        if len(nearest_indices) == 0:
+            continue
+        
+        # Choisir un voisin aléatoire
+        neighbor_idx = np.random.choice(nearest_indices)
+        neighbor = X_minority[neighbor_idx]
+        
+        # Générer un nouvel échantillon synthétique
+        alpha = np.random.random()
+        synthetic = sample + alpha * (neighbor - sample)
+        synthetic_samples.append(synthetic)
+    
+    if synthetic_samples:
+        X_synthetic = np.array(synthetic_samples)
+        y_synthetic = np.full(len(X_synthetic), minority_class)
+        
+        X_resampled = np.vstack([X, X_synthetic])
+        y_resampled = np.hstack([y, y_synthetic])
+    else:
+        X_resampled, y_resampled = X, y
+    
+    return X_resampled, y_resampled
+
 
 # ──────────────────────────────────────────────────────────────────────────────────────
 # IMPORTS TENSORFLOW / KERAS (ANN + CNN)
@@ -257,10 +362,7 @@ def charger_donnees():
 
 
 def ingenierie_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Feature Engineering avancé
-    Sources: nagatejakachapuram + claredang
-    """
+    """Feature Engineering avancé - Sources: nagatejakachapuram + claredang"""
     df = df.copy()
     
     # Nettoyage
@@ -383,7 +485,7 @@ def modeles_classiques():
 # MODÈLES DEEP LEARNING (ANN + CNN)
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
-def build_ann(input_dim: int) -> Sequential:
+def build_ann(input_dim: int):
     """Construction du réseau de neurones artificiels (ANN)."""
     model = Sequential([
         Dense(256, activation="relu", input_shape=(input_dim,)),
@@ -412,7 +514,7 @@ def build_ann(input_dim: int) -> Sequential:
     return model
 
 
-def build_cnn(input_dim: int) -> Sequential:
+def build_cnn(input_dim: int):
     """Construction du réseau de neurones convolutif (CNN 1D)."""
     model = Sequential([
         Input(shape=(input_dim, 1)),
@@ -447,6 +549,9 @@ def build_cnn(input_dim: int) -> Sequential:
 
 def entrainer_deep(X_tr, X_te, y_tr, y_te, kind="ANN"):
     """Entraîne un modèle Deep Learning et retourne les résultats."""
+    if not TF_OK:
+        return None, None, None, 0, 0, None
+    
     es = EarlyStopping(
         monitor="val_loss", patience=15, restore_best_weights=True, verbose=0
     )
@@ -501,7 +606,7 @@ def plot_roc_curves(results, y_test, best_name):
     ax.set_xlabel("Taux de faux positifs (1 - Spécificité)", fontsize=12)
     ax.set_ylabel("Taux de vrais positifs (Sensibilité)", fontsize=12)
     ax.set_title("📈 Courbes ROC de tous les modèles", fontsize=14, fontweight="bold")
-    ax.legend(loc="lower right", fontsize=9)
+    ax.legend(loc="lower right", fontsize=8)
     ax.grid(True, alpha=0.3)
     ax.set_xlim([-0.02, 1.02])
     ax.set_ylim([-0.02, 1.02])
@@ -527,7 +632,7 @@ def plot_pr_curves(results, y_test, best_name):
     ax.set_xlabel("Rappel (Recall)", fontsize=12)
     ax.set_ylabel("Précision (Precision)", fontsize=12)
     ax.set_title("📊 Courbes Précision-Rappel de tous les modèles", fontsize=14, fontweight="bold")
-    ax.legend(loc="lower left", fontsize=9)
+    ax.legend(loc="lower left", fontsize=8)
     ax.grid(True, alpha=0.3)
     ax.set_xlim([-0.02, 1.02])
     ax.set_ylim([-0.02, 1.02])
@@ -653,6 +758,9 @@ def plot_model_comparison(results):
 
 def plot_training_history(history, model_name):
     """Dessine l'historique d'entraînement d'un modèle Deep Learning."""
+    if history is None:
+        return None
+    
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
     # Accuracy
@@ -694,9 +802,9 @@ def pipeline_complet(df_raw: pd.DataFrame):
     X = df.drop(columns=[target]).values
     y = df[target].values
     
-    with st.spinner("⚖️ Équilibrage des classes (SMOTE)..."):
-        smote = SMOTE(random_state=42)
-        X, y = smote.fit_resample(X, y)
+    with st.spinner("⚖️ Équilibrage des classes (méthode manuelle)..."):
+        # Utilisation de l'oversampling manuel au lieu de SMOTE
+        X, y = manual_oversample(X, y, random_state=42)
     
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
@@ -743,27 +851,29 @@ def pipeline_complet(df_raw: pd.DataFrame):
     if TF_OK:
         status_text.text("🔄 Entraînement: 🧠 ANN")
         ann, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "ANN")
-        results["🧠 ANN"] = {
-            "modele": ann, "accuracy": acc, "auc": roc,
-            "y_pred": yp, "y_proba": yprob, "history": hist,
-            "precision": precision_score(y_te, yp, zero_division=0),
-            "recall": recall_score(y_te, yp, zero_division=0),
-            "f1": f1_score(y_te, yp, zero_division=0)
-        }
-        step += 1
-        progress_bar.progress(step / n_models)
+        if ann is not None:
+            results["🧠 ANN"] = {
+                "modele": ann, "accuracy": acc, "auc": roc,
+                "y_pred": yp, "y_proba": yprob, "history": hist,
+                "precision": precision_score(y_te, yp, zero_division=0),
+                "recall": recall_score(y_te, yp, zero_division=0),
+                "f1": f1_score(y_te, yp, zero_division=0)
+            }
+            step += 1
+            progress_bar.progress(step / n_models)
         
         status_text.text("🔄 Entraînement: 📡 CNN")
         cnn, yp, yprob, acc, roc, hist = entrainer_deep(X_tr, X_te, y_tr, y_te, "CNN")
-        results["📡 CNN"] = {
-            "modele": cnn, "accuracy": acc, "auc": roc,
-            "y_pred": yp, "y_proba": yprob, "history": hist,
-            "precision": precision_score(y_te, yp, zero_division=0),
-            "recall": recall_score(y_te, yp, zero_division=0),
-            "f1": f1_score(y_te, yp, zero_division=0)
-        }
-        step += 1
-        progress_bar.progress(1.0)
+        if cnn is not None:
+            results["📡 CNN"] = {
+                "modele": cnn, "accuracy": acc, "auc": roc,
+                "y_pred": yp, "y_proba": yprob, "history": hist,
+                "precision": precision_score(y_te, yp, zero_division=0),
+                "recall": recall_score(y_te, yp, zero_division=0),
+                "f1": f1_score(y_te, yp, zero_division=0)
+            }
+            step += 1
+            progress_bar.progress(min(1.0, step / n_models))
     
     status_text.text("✅ Entraînement terminé !")
     time.sleep(1)
@@ -807,7 +917,7 @@ def preparer_patient(reponses, infos, scaler, n_features):
     
     # Features calculées
     sum_score = sum(q_scores)
-    avg_score = sum_score / 10
+    avg_score = sum_score / 10 if sum_score > 0 else 0
     high_risk = 1 if sum_score >= 7 else 0
     
     # Age group
@@ -1167,7 +1277,7 @@ elif st.session_state.page == 4:
         for name, res in results.items():
             clf = res["modele"]
             try:
-                if name in ["🧠 ANN", "📡 CNN"]:
+                if name in ["🧠 ANN", "📡 CNN"] and TF_OK:
                     if name == "📡 CNN":
                         X_in = patient_scaled.reshape(-1, n_features, 1)
                     else:
@@ -1193,10 +1303,7 @@ elif st.session_state.page == 4:
     consensus = votes_positive / len(all_predictions)
     consensus_pred = int(consensus > 0.5)
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # AFFICHAGE DU RÉSULTAT PRINCIPAL
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
     st.markdown(f'<div class="winner-box fade-in">🏆 Décision finale — {best_name}</div>', 
                 unsafe_allow_html=True)
     
@@ -1231,11 +1338,8 @@ elif st.session_state.page == 4:
     st.progress(best_proba)
     st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # VOTE DE TOUS LES MODÈLES
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
-    st.subheader("🗳️ Vote des 10 modèles")
+    st.subheader("🗳️ Vote des modèles")
     
     cols = st.columns(4)
     for idx, (name, proba) in enumerate(sorted(all_probas.items(), key=lambda x: x[1], reverse=True)):
@@ -1265,17 +1369,14 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # SECTION 1: COMPARAISON DE TOUS LES MODÈLES
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
     st.subheader("📊 Comparaison des performances de tous les modèles")
     
-    # Graphique de comparaison
     with st.container():
         st.markdown('<div class="plot-container">', unsafe_allow_html=True)
         fig_comp = plot_model_comparison(results)
         st.pyplot(fig_comp)
+        plt.close()
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Tableau des métriques
@@ -1296,10 +1397,7 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # SECTION 2: COURBES ROC ET PR DE TOUS LES MODÈLES
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
     st.subheader("📈 Courbes d'évaluation de tous les modèles")
     
     col_roc, col_pr = st.columns(2)
@@ -1322,33 +1420,21 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # SECTION 3: COURBE D'APPRENTISSAGE DU MEILLEUR MODÈLE
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
-    st.subheader("📉 Courbe d'apprentissage du meilleur modèle")
-    
-    with st.container():
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+    if best_name not in ["🧠 ANN", "📡 CNN"]:
+        st.subheader("📉 Courbe d'apprentissage du meilleur modèle")
         
-        if best_name not in ["🧠 ANN", "📡 CNN"]:
+        with st.container():
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
             X_combined = np.vstack([st.session_state.X_train, st.session_state.X_test])
             y_combined = np.concatenate([st.session_state.y_train, st.session_state.y_test])
-            
             fig_lc = plot_learning_curve(best_model, X_combined, y_combined, best_name)
             st.pyplot(fig_lc)
             plt.close()
-        else:
-            st.info("ℹ️ Les courbes d'apprentissage pour les modèles Deep Learning sont disponibles dans la section suivante.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
     
-    st.markdown("---")
-    
-    # ──────────────────────────────────────────────────────────────────────────────────
-    # SECTION 4: MATRICE DE CONFUSION ET RAPPORT
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
+    # SECTION 4: MATRICE DE CONFUSION
     st.subheader("📊 Évaluation détaillée du meilleur modèle")
     
     col_cm, col_cr = st.columns(2)
@@ -1382,10 +1468,7 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
-    # SECTION 5: HISTORIQUE DEEP LEARNING (si disponible)
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
+    # SECTION 5: HISTORIQUE DEEP LEARNING
     if TF_OK:
         dl_models = [(name, res) for name, res in results.items() 
                      if name in ["🧠 ANN", "📡 CNN"] and res["history"] is not None]
@@ -1399,41 +1482,32 @@ elif st.session_state.page == 4:
                     st.markdown(f'<div class="plot-container">', unsafe_allow_html=True)
                     st.markdown(f"#### {name}")
                     fig_hist = plot_training_history(res["history"], name)
-                    st.pyplot(fig_hist)
-                    plt.close()
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    if fig_hist:
+                        st.pyplot(fig_hist)
+                        plt.close()
+                    st.markdown('</div>')
             
             st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # SECTION 6: IMPORTANCE DES CARACTÉRISTIQUES
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
-    st.subheader("🎯 Importance des caractéristiques")
-    
-    with st.container():
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+    if best_name not in ["🧠 ANN", "📡 CNN"]:
+        st.subheader("🎯 Importance des caractéristiques")
         
-        fig_fi = plot_feature_importance(
-            best_model, 
-            st.session_state.col_names,
-            best_name
-        )
+        with st.container():
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+            fig_fi = plot_feature_importance(
+                best_model, 
+                st.session_state.col_names,
+                best_name
+            )
+            if fig_fi:
+                st.pyplot(fig_fi)
+                plt.close()
+            st.markdown('</div>')
         
-        if fig_fi:
-            st.pyplot(fig_fi)
-            plt.close()
-        else:
-            st.info("ℹ️ L'importance des caractéristiques n'est pas disponible pour ce type de modèle (ANN/CNN).")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
     
-    st.markdown("---")
-    
-    # ──────────────────────────────────────────────────────────────────────────────────
-    # SECTION 7: RECOMMANDATIONS PERSONNALISÉES
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
+    # RECOMMANDATIONS PERSONNALISÉES
     st.subheader("💡 Recommandations personnalisées")
     
     role = st.session_state.role
@@ -1444,16 +1518,14 @@ elif st.session_state.page == 4:
             • 👶 **Consultez rapidement un pédiatre** ou neuropédiatre spécialisé
             • 📞 **Contactez un centre de référence** pour l'autisme (CRA)
             • 📝 **Notez les comportements observés** pour le prochain rendez-vous
-            • 📚 **Renseignez-vous** sur les interventions précoces (orthophonie, ergothérapie)
-            • 🤝 **Rejoignez des groupes de soutien** pour parents
+            • 📚 **Renseignez-vous** sur les interventions précoces
             """
         else:
             recommendations = """
-            • 🔬 **Réalisez une évaluation clinique approfondie** (ADOS-2, CARS, M-CHAT)
+            • 🔬 **Réalisez une évaluation clinique approfondie** (ADOS-2, CARS)
             • 🏥 **Orientez vers un centre spécialisé** si nécessaire
-            • 📊 **Prescrivez des examens complémentaires** (tests auditifs, génétiques)
-            • 📝 **Documentez l'historique** du développement du patient
-            • 🤝 **Proposez un suivi multidisciplinaire** (psychologue, orthophoniste)
+            • 📊 **Prescrivez des examens complémentaires**
+            • 📝 **Documentez l'historique** du développement
             """
         
         st.markdown(f"""
@@ -1469,16 +1541,12 @@ elif st.session_state.page == 4:
             • ✅ **Continuez à surveiller** le développement de votre enfant
             • 📅 **Maintenez les visites régulières** chez le pédiatre
             • 🎨 **Encouragez les activités sociales** et l'interaction
-            • 📖 **Stimulez le langage** à la maison (lecture, conversations)
-            • 👀 **Soyez attentif** aux étapes clés du développement
             """
         else:
             recommendations = """
             • ✅ **Rassurez les parents**, le développement semble dans la norme
             • 📅 **Continuez le suivi régulier** selon le carnet de santé
             • 📊 **Surveillez les étapes clés** du développement
-            • 📝 **Documentez** tout comportement inhabituel
-            • 🤝 **Restez disponible** pour des consultations de suivi
             """
         
         st.markdown(f"""
@@ -1491,10 +1559,7 @@ elif st.session_state.page == 4:
     
     st.markdown("---")
     
-    # ──────────────────────────────────────────────────────────────────────────────────
     # BOUTON NOUVELLE ÉVALUATION
-    # ──────────────────────────────────────────────────────────────────────────────────
-    
     _, col_reset, _ = st.columns([1, 2, 1])
     
     with col_reset:
@@ -1511,11 +1576,7 @@ elif st.session_state.page == 4:
 st.markdown("""
 <div style="text-align:center; padding:2rem; color:rgba(255,255,255,0.6);">
     <hr style="border-color:rgba(255,255,255,0.2);">
-    <p>🧠 <strong>NeuroSense</strong> — Fusion des meilleurs projets GitHub sur la prédiction de l'autisme</p>
-    <p style="font-size:0.75rem;">
-        Sources : claredang · nagatejakachapuram · yashmahes · Shehab-Hegab ·<br>
-        prasanna24062004 · MASANAMUTHU22 · Ankita-M-24 · Anvesh-3 · gokul427
-    </p>
+    <p>🧠 <strong>NeuroSense</strong> — Fusion des meilleurs projets GitHub</p>
     <p style="font-size:0.7rem;">
         ⚠️ Cet outil est une aide à la décision. Consultez toujours un professionnel de santé.
     </p>
